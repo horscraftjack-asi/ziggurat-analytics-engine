@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ziggurat Analytics Engine</title>
+<style>
+  :root { --accent: #2A4A44; --bg: #faf9f7; --line: #e3e0db; --ink: #1d1d1b; --muted: #6b6b66; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Arial, sans-serif; background: var(--bg); color: var(--ink);
+         margin: 0; padding: 2.5rem 1rem; line-height: 1.5; }
+  .card { max-width: 560px; margin: 0 auto; background: #fff; border: 1px solid var(--line);
+          border-radius: 14px; padding: 2rem 2rem 2.25rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  .sub { color: var(--muted); margin: 0 0 1.75rem; font-size: .92rem; }
+  label { display: block; font-weight: 600; font-size: .9rem; margin: 1.1rem 0 .35rem; }
+  .hint { font-weight: 400; color: var(--muted); font-size: .82rem; }
+  select, input[type=text] { width: 100%; padding: .6rem .7rem; border: 1px solid var(--line);
+          border-radius: 8px; font-size: .95rem; background: #fff; }
+  .drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: .9rem; font-size: .88rem;
+          color: var(--muted); cursor: pointer; transition: border-color .15s; }
+  .drop:hover { border-color: var(--accent); }
+  .drop input { display: none; }
+  .drop.filled { border-style: solid; border-color: var(--accent); color: var(--ink); }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .6rem; }
+  button { margin-top: 1.75rem; width: 100%; padding: .8rem; background: var(--accent); color: #fff;
+           border: 0; border-radius: 9px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 1rem; padding: .7rem .8rem; border-radius: 8px; font-size: .88rem; display: none; }
+  .msg.err { background: #fdeaea; color: #8b2020; display: block; }
+  .msg.ok { background: #eaf6ec; color: #1b5e2a; display: block; }
+  details { margin-top: 1.25rem; font-size: .85rem; color: var(--muted); }
+  summary { cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Analytics Engine</h1>
+  <p class="sub">Upload a month of Meta exports, pick the client, download the scored workbook.</p>
+
+  <label>Client</label>
+  <select id="client">
+    {% for c in clients %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
+    <option value="__upload__">— Upload a config instead —</option>
+  </select>
+
+  <div id="configRow" style="display:none">
+    <label>Config file <span class="hint">(a *-analytics-config.md)</span></label>
+    <label class="drop" id="dropConfig">Choose config…<input type="file" id="config" accept=".md"></label>
+  </div>
+
+  <label>CSV exports <span class="hint">— add whichever you have</span></label>
+  <div class="row3">
+    <label class="drop" id="dropFb">Facebook<input type="file" id="fb" accept=".csv"></label>
+    <label class="drop" id="dropIg">Instagram<input type="file" id="ig" accept=".csv"></label>
+    <label class="drop" id="dropStories">Stories<input type="file" id="stories" accept=".csv"></label>
+  </div>
+
+  <label>Month <span class="hint">(optional — auto-detected if blank)</span></label>
+  <input type="text" id="month" placeholder="e.g. May 2026">
+
+  <button id="go">Build workbook</button>
+  <div class="msg" id="msg"></div>
+
+  <details>
+    <summary>How does this work?</summary>
+    <p>The engine scores every post by rank-order within its platform, splits out special content
+    (e.g. Trial Reels), flags CTAs, and builds the standard tabs. It produces the data tabs fully;
+    the written insight tabs are added afterward. No data leaves Ziggurat's app.</p>
+  </details>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const client = $("client"), configRow = $("configRow"), msg = $("msg"), go = $("go");
+
+  client.onchange = () => configRow.style.display = client.value === "__upload__" ? "block" : "none";
+
+  // reflect chosen filenames on the drop labels
+  ["fb","ig","stories","config"].forEach(id => {
+    const input = $(id); if (!input) return;
+    input.onchange = () => {
+      const label = input.closest(".drop");
+      if (input.files.length) { label.classList.add("filled");
+        label.childNodes[0].nodeValue = input.files[0].name; }
+    };
+  });
+
+  go.onclick = async () => {
+    msg.className = "msg"; msg.textContent = "";
+    const fd = new FormData();
+    fd.append("client", client.value);
+    fd.append("month", $("month").value);
+    ["fb","ig","stories","config"].forEach(id => {
+      const f = $(id); if (f && f.files.length) fd.append(id, f.files[0]);
+    });
+    if (!$("fb").files.length && !$("ig").files.length && !$("stories").files.length) {
+      msg.className = "msg err"; msg.textContent = "Add at least one CSV."; return;
+    }
+    go.disabled = true; go.textContent = "Building…";
+    try {
+      const r = await fetch("/run", { method: "POST", body: fd });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({error: "Build failed."}));
+        msg.className = "msg err";
+        msg.textContent = e.error + (e.detail ? " " + JSON.stringify(e.detail) : "");
+      } else {
+        const blob = await r.blob();
+        const name = (r.headers.get("Content-Disposition") || "").match(/filename="?([^"]+)"?/);
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name ? name[1] : "performance.xlsx";
+        a.click();
+        msg.className = "msg ok"; msg.textContent = "Workbook ready — check your downloads.";
+      }
+    } catch (err) {
+      msg.className = "msg err"; msg.textContent = "Network error: " + err.message;
+    }
+    go.disabled = false; go.textContent = "Build workbook";
+  };
+</script>
+</body>
+</html>
