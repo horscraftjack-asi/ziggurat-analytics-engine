@@ -233,40 +233,77 @@ def score_posts(df: pd.DataFrame, metrics: list, sparsity: float) -> pd.DataFram
     score_cols = [f"Score: {m}" for m in scored_metrics]
     df["Total Score"] = df[score_cols].sum(axis=1).astype(int)
     df["Overall Rank"] = df["Total Score"].rank(method="min", ascending=False).astype(int)
-    df = df.sort_values("Overall Rank").reset_index(drop=True)
+    # Sort by rank, breaking Total-Score ties by older-date-first so the order is deterministic
+    # and reproducible run to run (otherwise tied posts fall in arbitrary input order).
+    if "Publish time" in df.columns:
+        df["_pub"] = pd.to_datetime(df["Publish time"], errors="coerce")
+        df = df.sort_values(["Overall Rank", "_pub"], ascending=[True, True]).drop(columns="_pub").reset_index(drop=True)
+    else:
+        df = df.sort_values("Overall Rank").reset_index(drop=True)
     return df
 
 
 # ----------------------------------------------------------------------------------------------
-# Workbook build — STUBBED. Structure + styling spec encoded; fleshed out in the test phase.
+# Workbook build — assembles all tabs in the standard order using core/tabs.py builders.
 # ----------------------------------------------------------------------------------------------
-def build_workbook(tables: dict, cfg: Config, month: str, out_dir: str, notes: list) -> str:
+def build_workbook(tables: dict, cfg: Config, month: str, out_dir: str, notes: list,
+                   breakdown_frames: dict | None = None, insights: dict | None = None) -> str:
     """
-    tables: {"facebook": df, "instagram": df, "stories": df, "<special>": df}
-    Builds the .xlsx per the ChefSteps-skill spec (Steps 5-11), client-agnostic via cfg.
-    Returns the output path.
+    tables:           scored frames keyed "facebook" / "instagram" / "stories" / "<special name>"
+    breakdown_frames: full IG/FB frames (pre-special-split) for the Footnotes breakdown tables
+    insights:         optional pre-written insight content; if absent, insight sections are shells
+    Builds the .xlsx in the uniform Ziggurat format. Returns the output path.
     """
-    from openpyxl import Workbook  # imported here so --validate-only needs no openpyxl
+    from openpyxl import Workbook
+    try:
+        from . import tabs
+    except ImportError:
+        import tabs  # direct-script invocation (CLI) where there's no parent package
 
+    breakdown_frames = breakdown_frames or {}
     fname = cfg.output_filename.replace("[MonthYear]", month.replace(" ", ""))
     out_path = os.path.join(out_dir, fname)
     wb = Workbook()
     wb.remove(wb.active)
 
-    # TODO (test phase): implement per-tab build against real CSVs, in this order:
-    #   build_feed_tab(wb, tables["facebook"], cfg, month, kind="facebook")
-    #   build_feed_tab(wb, tables["instagram"], cfg, month, kind="instagram")
-    #   for special tabs: build_feed_tab(..., kind="instagram", scored_independently=True)
-    #   build_stories_tab(wb, tables["stories"], cfg, month)
-    #   build_footnotes_shell(wb, cfg)     # labelled sections, model fills the prose
-    #   build_summary_shell(wb, cfg)       # labelled lenses, model fills the prose
-    # Each honours STYLE + cfg.brand_accent_hex, per-tab column layout, colour coding,
-    # freeze panes (first raw metric col, row 3), collapsed caption col (width 3), autofilter.
-    for name in tables:
-        ws = wb.create_sheet(title=f"{name.title()[:20]} — {month}")
-        ws["A1"] = f"[scaffold] {name} — {len(tables[name])} rows scored. Tab build pending test phase."
-    wb.create_sheet(title="Footnotes & Insights")["A1"] = "[shell] model fills this tab"
-    wb.create_sheet(title="Summary & Strategy")["A1"] = "[shell] model fills this tab"
+    # Standard tab order: Facebook, Instagram, [special: Trial Reels], Stories, Footnotes, Summary.
+    if "facebook" in tables:
+        tabs.build_feed_tab(wb, tables["facebook"], cfg, month, kind="facebook")
+    if "instagram" in tables:
+        tabs.build_feed_tab(wb, tables["instagram"], cfg, month, kind="instagram")
+
+    # Special-content tabs (e.g. Trial Reels). If a configured type produced zero posts this
+    # month, still emit the tab with the low-count note — the team expects the tab to exist.
+    for sc in cfg.special_content:
+        name = sc["name"]
+        if name in tables and len(tables[name]):
+            tabs.build_feed_tab(wb, tables[name], cfg, month, kind=sc["platform"],
+                                title=f"{name} — {month}",
+                                top_note=f"{name} are scored independently and excluded from the main Instagram performance data.")
+        else:
+            note = (f"0 {name} detected in {month}. No posts contained the trial-format copy markers."
+                    if name.lower().startswith("trial")
+                    else f"0 {name} detected in {month}.")
+            tabs.build_empty_special_tab(wb, name, month, note)
+
+    if "stories" in tables:
+        tabs.build_stories_tab(wb, tables["stories"], cfg, month)
+
+    extra = []
+    n_special = sum(len(tables.get(sc["name"], [])) for sc in cfg.special_content)
+    extra.append(f"{n_special} {cfg.special_content[0]['name'] if cfg.special_content else 'special'} detected this month."
+                 if cfg.special_content else "")
+    extra.append("Stories CSV present." if "stories" in tables else "No Stories CSV this month.")
+
+    tabs.build_footnotes(wb, cfg, month,
+                         ig_df=breakdown_frames.get("instagram"),
+                         fb_df=breakdown_frames.get("facebook"),
+                         st_df=tables.get("stories"), insights=insights)
+    tabs.build_summary(wb, cfg, month,
+                       ig_df=breakdown_frames.get("instagram"),
+                       fb_df=breakdown_frames.get("facebook"),
+                       st_df=tables.get("stories"), insights=insights,
+                       extra_note="Note: " + " ".join(x for x in extra if x))
 
     os.makedirs(out_dir, exist_ok=True)
     wb.save(out_path)
@@ -350,7 +387,9 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
     if "stories" in dfs:
         tables["stories"] = score_posts(dfs["stories"].copy(), cfg.metrics.get("stories", []), cfg.sparsity_threshold)
 
-    out_path = build_workbook(tables, cfg, month, out_dir, report["notes"])
+    breakdown_frames = {"instagram": tables.get("instagram"), "facebook": tables.get("facebook")}
+    out_path = build_workbook(tables, cfg, month, out_dir, report["notes"],
+                              breakdown_frames=breakdown_frames)
     report.update({"status": "built", "month": month, "output": out_path,
                    "counts": {k: len(v) for k, v in tables.items()}})
     return report
