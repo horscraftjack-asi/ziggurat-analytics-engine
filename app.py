@@ -51,12 +51,12 @@ def run():
 
     # Save whichever CSVs were provided
     paths = {}
-    for field in ("fb", "ig", "stories"):
+    for field, plat in (("fb", "facebook"), ("ig", "instagram"), ("stories", "stories")):
         f = request.files.get(field)
         if f and f.filename:
             p = os.path.join(workdir, f"{field}.csv")
             f.save(p)
-            paths[field] = p
+            paths[plat] = p
     if not paths:
         return jsonify({"error": "Upload at least one CSV (Facebook, Instagram, or Stories)."}), 400
 
