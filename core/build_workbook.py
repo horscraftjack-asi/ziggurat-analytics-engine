@@ -274,6 +274,47 @@ def is_special(desc: str, phrases: list) -> bool:
 
 
 # ----------------------------------------------------------------------------------------------
+# Cross-platform leaderboard — used by the web UI's result screen. Built from the SAME scored
+# tables the workbook tabs use, so "top performer" always matches what's in the .xlsx.
+# ----------------------------------------------------------------------------------------------
+def _platform_tag(platform: str, post_type) -> str:
+    pt = str(post_type or "").strip()
+    if platform == "instagram":
+        return f"IG {pt.split()[-1].upper()}" if pt else "IG POST"
+    if platform == "facebook":
+        return f"FB {pt.upper()}" if pt else "FB POST"
+    if platform == "stories":
+        return "STORY"
+    if platform == "youtube_shorts":
+        return "YT SHORT"
+    if platform == "youtube_longform":
+        return "YT LONG"
+    return platform.upper()
+
+
+def top_posts(tables: dict, limit: int = 4) -> list:
+    """Combine every scored table into one cross-platform leaderboard by Total Score."""
+    rows = []
+    for plat in ("facebook", "instagram", "stories", "youtube_shorts", "youtube_longform"):
+        df = tables.get(plat)
+        if df is None or not len(df):
+            continue
+        for _, r in df.iterrows():
+            title = r.get("Video title") or r.get("Title") or r.get("Description") or ""
+            views = pd.to_numeric(r.get("Views"), errors="coerce")
+            rows.append({
+                "platform": plat,
+                "tag": _platform_tag(plat, r.get("Post type")),
+                "title": str(title).strip()[:140],
+                "score": int(r.get("Total Score", 0)),
+                "views": None if pd.isna(views) else float(views),
+                "permalink": r.get("Permalink") or "",
+            })
+    rows.sort(key=lambda x: x["score"], reverse=True)
+    return rows[:limit]
+
+
+# ----------------------------------------------------------------------------------------------
 # Rank-order scoring — standard competition ranking, ties share rank, sum across metrics
 # ----------------------------------------------------------------------------------------------
 def score_posts(df: pd.DataFrame, metrics: list, sparsity: float) -> pd.DataFrame:
@@ -522,6 +563,7 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
     out_path = build_workbook(tables, cfg, month, out_dir, report["notes"],
                               breakdown_frames=breakdown_frames, insights=insights)
     report.update({"status": "built", "month": month, "output": out_path,
+                   "top_posts": top_posts(tables),
                    "counts": {k: len(v) for k, v in tables.items()}})
     return report
 
