@@ -513,11 +513,8 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
         from .insights import generate_insights
     except ImportError:
         from insights import generate_insights
-    insights = generate_insights(cfg, tables, month)
-    if insights:
-        report["notes"].append("Claude insights generated.")
-    else:
-        report["notes"].append("No Claude insights (API key absent or call failed).")
+    insights, insight_note = generate_insights(cfg, tables, month)
+    report["notes"].append(insight_note)
 
     out_path = build_workbook(tables, cfg, month, out_dir, report["notes"],
                               breakdown_frames=breakdown_frames, insights=insights)

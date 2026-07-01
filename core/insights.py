@@ -139,21 +139,21 @@ Rules:
 """
 
 
-def generate_insights(cfg, tables: dict, month: str) -> dict | None:
+def generate_insights(cfg, tables: dict, month: str) -> tuple[dict | None, str]:
     """Call Claude to generate the written insight sections.
 
-    Returns the insights dict or None if the API key is absent or the call fails.
-    The insights dict matches the structure expected by tabs.build_footnotes() and
-    tabs.build_summary(): each section is a list of (label/lens, body) tuples.
+    Returns (insights_dict, note) where note describes success or failure.
+    insights_dict is None if the API key is absent or the call fails — the workbook
+    builds with shell tabs in that case.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return None
+        return None, "No Claude insights (ANTHROPIC_API_KEY not set)."
 
     try:
         import anthropic
     except ImportError:
-        return None
+        return None, "No Claude insights (anthropic SDK not installed)."
 
     prompt = _build_prompt(cfg, tables, month)
 
@@ -167,17 +167,24 @@ def generate_insights(cfg, tables: dict, month: str) -> dict | None:
         ) as stream:
             msg = stream.get_final_message()
 
+        # With adaptive thinking the response has thinking blocks followed by a text block.
+        # Collect the last text block (the one that contains the JSON).
         raw_text = ""
         for block in msg.content:
-            if hasattr(block, "text"):
+            if getattr(block, "type", None) == "text" and hasattr(block, "text"):
                 raw_text = block.text
-                break
 
-        data = json.loads(raw_text)
-        return _normalise(data)
+        # Strip markdown fences if Claude added them despite instructions
+        stripped = raw_text.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped
+            stripped = stripped.rsplit("```", 1)[0].strip()
 
-    except Exception:
-        return None
+        data = json.loads(stripped)
+        return _normalise(data), "Claude insights generated."
+
+    except Exception as exc:
+        return None, f"Claude insights failed: {type(exc).__name__}: {exc}"
 
 
 def _normalise(data: dict) -> dict:
