@@ -38,6 +38,24 @@ is all Railway needs.
 Drop a `[slug]-analytics-config.md` into `configs/` and redeploy — the dropdown self-populates.
 Configs are produced by the `analytics-config-intake` skill.
 
+## API surface (for the unified flywheel frontend)
+
+This app's own page (`templates/index.html`) still works exactly as before — nothing here changes
+that. These two routes are the additive surface an external frontend calls to fold analytics into
+the same unified UI as the scraper/sentiment tools, without merging repos or deploys:
+
+- **`GET /api/clients`** — `{ "clients": [{ "slug", "name", "platforms_active" }, ...] }`. Same
+  source as the page's own dropdown (`available_clients()`), just JSON instead of Jinja.
+- **`POST /run`** — unchanged; already the route the page's own JS calls via `fetch()` with
+  `FormData`. Returns the built `.xlsx` as a file download, with build metadata (client, month,
+  counts, notes) in response headers (`X-Client`, `X-Month`, `X-Counts`, `X-Notes`,
+  `X-Insight-Note`) rather than a JSON body, since the primary response has to be the file.
+
+**CORS:** set `FRONTEND_ORIGIN` (comma-separated for multiple) to the unified frontend's URL so it
+can call `/api/clients` and `/run` cross-origin. Unset defaults to `*` — fine for local dev; lock it
+down before this is load-bearing in production. This app's own same-origin page is unaffected either
+way.
+
 ## Architecture
 `core/build_workbook.py` is the single source of truth — the SAME file the analytics-engine skill
 uses. The web app and the skill both call `run_build()`, so scoring logic never forks.

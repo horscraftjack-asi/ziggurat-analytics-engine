@@ -12,11 +12,21 @@ import json
 import tempfile
 from urllib.parse import quote
 from flask import Flask, request, render_template, send_file, jsonify
+from flask_cors import CORS
 
 from core import build_workbook as bw
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB upload cap
+
+# Lock CORS to the frontend's origin in production. Set FRONTEND_ORIGIN to the
+# unified frontend's URL (comma-separated for multiple). Unset -> "*", so this
+# app's own Jinja page (same-origin, unaffected by CORS either way) and local
+# dev keep working. Mirrors the pattern in ziggurat-comment-scraper/app.py so
+# both backends configure the same way.
+_origins_env = os.environ.get("FRONTEND_ORIGIN", "").strip()
+_origins = [o.strip() for o in _origins_env.split(",") if o.strip()] or "*"
+CORS(app, resources={r"/api/*": {"origins": _origins}, r"/run": {"origins": _origins}})
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "configs")
 
@@ -31,12 +41,29 @@ def available_clients():
     return clients
 
 
+@app.route("/api/clients", methods=["GET"])
+def api_clients():
+    """JSON client list for an external frontend's dropdown — same source as the
+    Jinja page's own list, just without the HTML. Mirrors the sentiment-analyzer's
+    /sentiment/options pattern so both tools' frontends self-populate the same way."""
+    return jsonify({
+        "clients": [
+            {"slug": c["slug"], "name": c["name"], "platforms_active": c["platforms_active"]}
+            for c in available_clients()
+        ],
+    })
+
+
 @app.route("/")
 def index():
     clients = available_clients()
     # Build a slug -> platforms_active map for the frontend badge logic
     client_platforms = {c["slug"]: c["platforms_active"] for c in clients}
-    return render_template("index.html", clients=clients, client_platforms=client_platforms)
+    # If set, the Result screen's "Scrape top video" flywheel hop links to the deployed
+    # Comment Scraper frontend with the top YouTube post's URL pre-filled. Unset -> hidden.
+    scraper_url = os.environ.get("SCRAPER_URL", "").strip().rstrip("/")
+    return render_template("index.html", clients=clients, client_platforms=client_platforms,
+                           scraper_url=scraper_url)
 
 
 @app.route("/run", methods=["POST"])
@@ -96,8 +123,9 @@ def run():
     resp.headers["X-Month"] = quote(result.get("month") or "")
     resp.headers["X-Counts"] = quote(json.dumps(result.get("counts") or {}))
     resp.headers["X-Notes"] = quote(json.dumps(other_notes))
+    resp.headers["X-Top-Posts"] = quote(json.dumps(result.get("top_posts") or []))
     resp.headers["Access-Control-Expose-Headers"] = (
-        "X-Insight-Note, X-Client, X-Month, X-Counts, X-Notes"
+        "X-Insight-Note, X-Client, X-Month, X-Counts, X-Notes, X-Top-Posts"
     )
     return resp
 
