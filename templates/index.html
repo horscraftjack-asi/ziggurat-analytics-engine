@@ -143,9 +143,33 @@
   .notes-list div { padding: 2px 0; }
   .insight-note { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #B8F24A; margin-bottom: 26px; }
   .btn-secondary { flex: 1; height: 44px; border: 1px solid #2c3540; border-radius: 10px; background: transparent; color: #aab3c0; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .btn-secondary.accent-text { color: #B8F24A; flex: 1.4; }
   .btn-row { display: flex; gap: 10px; margin-top: 10px; }
   .err-box { background: #150a0b; border: 1px solid #3a1f22; border-radius: 10px; padding: 16px; margin-bottom: 24px; }
   .err-box p { margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #ff9d92; }
+
+  /* shared error pattern (§8) */
+  .err-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .err-mark { width: 40px; height: 40px; flex: none; border-radius: 11px; background: rgba(255,107,94,.12); color: #ff6b5e; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; }
+  .err-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: rgba(255,107,94,.1); color: #ff6b5e; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: .1em; }
+
+  /* top performer + ranked leaderboard */
+  .top-performer { background: #0A0D12; border: 1px solid #1c232d; border-radius: 12px; padding: 18px; margin-bottom: 26px; }
+  .top-performer-label { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 10px; letter-spacing: .2em; color: #B8F24A; margin-bottom: 12px; }
+  .top-performer-row { display: flex; gap: 14px; align-items: center; }
+  .top-performer-thumb { width: 104px; height: 58px; flex: none; border-radius: 8px; border: 1px solid #232b35; background: repeating-linear-gradient(135deg,#161c24 0 8px,#11161d 8px 16px); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #4f5a6a; }
+  .platform-tag { padding: 2px 7px; border-radius: 5px; background: #1c2530; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 10px; color: #9aa4b3; white-space: nowrap; }
+  .top-performer-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .top-performer-views { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #697483; }
+  .top-performer-title { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 15px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ranked-list { display: flex; flex-direction: column; margin-bottom: 26px; }
+  .ranked-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid #151b23; }
+  .ranked-row:first-child { border-top: none; }
+  .ranked-num { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; width: 18px; color: #697483; }
+  .ranked-num.accent { color: #B8F24A; }
+  .ranked-tag { width: 58px; text-align: center; font-size: 9px; }
+  .ranked-title { flex: 1; min-width: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 13px; color: #d7dce3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ranked-score { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14px; color: #fff; }
 </style>
 </head>
 <body>
@@ -245,11 +269,31 @@
       <!-- ============ RESULT ============ -->
       <div class="view" id="view-result">
         <div class="status-row">
-          <span class="pill"><span class="pdot"></span>COMPLETE</span>
+          <span class="pill"><span class="pdot"></span>WORKBOOK READY</span>
           <span class="finished-at" id="finishedAt"></span>
         </div>
         <div class="meta-line" id="resultMeta"></div>
         <div class="stat-cards" id="statCards"></div>
+
+        <div class="top-performer" id="topPerformerBox" style="display:none">
+          <div class="top-performer-label">▲ TOP PERFORMER</div>
+          <div class="top-performer-row">
+            <div class="top-performer-thumb" id="topPerformerThumb">POST</div>
+            <div style="min-width:0">
+              <div class="top-performer-meta">
+                <span class="platform-tag" id="topPerformerTag"></span>
+                <span class="top-performer-views" id="topPerformerViews"></span>
+              </div>
+              <div class="top-performer-title" id="topPerformerTitle"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="rankedBox" style="display:none">
+          <div class="label">Ranked · top <span id="rankedCount"></span></div>
+          <div class="ranked-list" id="rankedList"></div>
+        </div>
+
         <div class="notes-box" id="notesBox" style="display:none">
           <div class="label">Build notes</div>
           <div class="notes-list" id="notesList"></div>
@@ -257,12 +301,17 @@
         <div class="insight-note" id="insightNote" style="display:none"></div>
         <button class="btn-primary" id="downloadAgain">↓ Download workbook</button>
         <div class="btn-row">
-          <button class="btn-secondary" id="buildAnother">Build another</button>
+          <button class="btn-secondary accent-text" id="scrapeTopVideo" style="display:none">Scrape top video →</button>
+          <button class="btn-secondary" id="buildAnother">New run</button>
         </div>
       </div>
 
       <!-- ============ ERROR ============ -->
       <div class="view" id="view-error">
+        <div class="err-head">
+          <span class="err-mark">!</span>
+          <span class="err-pill">BUILD FAILED</span>
+        </div>
         <h1 style="font-size:28px">Couldn't build that</h1>
         <div class="err-box"><p id="errMsg"></p></div>
         <button class="btn-primary" id="tryAgain">Try again</button>
@@ -281,13 +330,9 @@
 
   // Per-client platform map injected from Flask.
   const clientPlatforms = {{ client_platforms | tojson }};
+  const SCRAPER_URL = {{ scraper_url | tojson }};
   const META_PLATS = new Set(["instagram", "facebook", "stories"]);
   const YT_PLATS   = new Set(["youtube", "youtube_shorts", "youtube_longform"]);
-
-  const PLATFORM_LABELS = {
-    facebook: "FACEBOOK", instagram: "INSTAGRAM", stories: "STORIES",
-    youtube_shorts: "SHORTS", youtube_longform: "LONG-FORM",
-  };
 
   function setSource(source) {
     const isYt = source === "youtube";
@@ -311,6 +356,14 @@
     configRow.style.display = client.value === "__upload__" ? "block" : "none";
     setSource(defaultSourceForClient());
   };
+
+  // Flywheel hop from the scraper/sentiment tools: ?client=<slug> preselects the
+  // dropdown if it matches a bundled client. Unknown/missing slug -> default, never errors.
+  const preselectSlug = new URLSearchParams(window.location.search).get("client");
+  if (preselectSlug && [...client.options].some(o => o.value === preselectSlug)) {
+    client.value = preselectSlug;
+  }
+
   setSource(defaultSourceForClient()); // populate on page load
 
   // reflect chosen filenames on the drop labels (and remember the original label so
@@ -331,7 +384,7 @@
   function setView(name) {
     ["idle","building","result","error"].forEach(v => $("view-"+v).classList.toggle("active", v === name));
     breadcrumb.textContent = { idle: "threadline — ~/analytics", building: "threadline — building…",
-                                result: "threadline — done", error: "threadline — ~/analytics" }[name];
+                                result: "threadline — ~/analytics · done", error: "threadline — error" }[name];
     $("logoGlyph").style.animation = name === "building" ? "tl-soft 1.3s ease-in-out infinite" : "";
   }
 
@@ -412,6 +465,7 @@
       const month = decode(r.headers.get("X-Month"));
       const counts = JSON.parse(decode(r.headers.get("X-Counts")) || "{}");
       const notes = JSON.parse(decode(r.headers.get("X-Notes")) || "[]");
+      const topPosts = JSON.parse(decode(r.headers.get("X-Top-Posts")) || "[]");
       const nameMatch = (r.headers.get("Content-Disposition") || "").match(/filename="?([^"]+)"?/);
       const filename = nameMatch ? nameMatch[1] : "performance.xlsx";
       const blob = await r.blob();
@@ -422,15 +476,58 @@
         renderSteps(3);
         timers.push(setTimeout(() => {
           const finishedMs = Date.now() - startedAt;
-          $("finishedAt").textContent = `finished in ${(finishedMs / 1000).toFixed(1)}s`;
-          $("resultMeta").textContent = [clientName, month].filter(Boolean).join(" · ");
+          $("finishedAt").textContent = `scored in ${(finishedMs / 1000).toFixed(1)}s`;
 
-          const total = Object.values(counts).reduce((a, b) => a + b, 0);
-          const cards = Object.entries(counts).map(([plat, n]) =>
-            `<div class="stat-card"><div class="stat-num">${n.toLocaleString()}</div><div class="stat-label">${PLATFORM_LABELS[plat] || plat.toUpperCase()}</div></div>`
-          );
-          cards.push(`<div class="stat-card"><div class="stat-num accent">${total.toLocaleString()}</div><div class="stat-label">TOTAL POSTS</div></div>`);
-          $("statCards").innerHTML = cards.join("");
+          const platformKeys = Object.keys(counts);
+          const hasMeta = platformKeys.some(p => META_PLATS.has(p));
+          const hasYT   = platformKeys.some(p => YT_PLATS.has(p));
+          const sourceLabel = hasMeta && hasYT ? "Meta + YouTube" : hasYT ? "YouTube" : hasMeta ? "Meta" : "";
+          $("resultMeta").textContent = [clientName, month, sourceLabel].filter(Boolean).join(" · ");
+
+          const totalPosts = Object.values(counts).reduce((a, b) => a + b, 0);
+          const topScore = topPosts.length ? topPosts[0].score : 0;
+          $("statCards").innerHTML = [
+            `<div class="stat-card"><div class="stat-num">${totalPosts.toLocaleString()}</div><div class="stat-label">POSTS SCORED</div></div>`,
+            `<div class="stat-card"><div class="stat-num">${platformKeys.length}</div><div class="stat-label">PLATFORMS</div></div>`,
+            `<div class="stat-card"><div class="stat-num accent">${topScore}</div><div class="stat-label">TOP SCORE</div></div>`,
+          ].join("");
+
+          const compact = (n) => n == null ? null : new Intl.NumberFormat("en", { notation: "compact" }).format(n);
+
+          if (topPosts.length) {
+            const top = topPosts[0];
+            $("topPerformerBox").style.display = "block";
+            $("topPerformerTag").textContent = top.tag;
+            $("topPerformerViews").textContent = top.views != null ? `${compact(top.views)} plays` : "";
+            $("topPerformerTitle").textContent = top.title || "(untitled)";
+            $("topPerformerThumb").textContent = top.tag.split(" ")[0];
+          } else {
+            $("topPerformerBox").style.display = "none";
+          }
+
+          if (topPosts.length > 1) {
+            $("rankedBox").style.display = "block";
+            $("rankedCount").textContent = topPosts.length;
+            $("rankedList").innerHTML = topPosts.map((p, i) => `
+              <div class="ranked-row">
+                <span class="ranked-num ${i === 0 ? "accent" : ""}">${i + 1}</span>
+                <span class="platform-tag ranked-tag">${p.tag}</span>
+                <span class="ranked-title">${p.title || "(untitled)"}</span>
+                <span class="ranked-score">${p.score}</span>
+              </div>`).join("");
+          } else {
+            $("rankedBox").style.display = "none";
+          }
+
+          const topIsYouTube = topPosts.length && topPosts[0].platform.startsWith("youtube") && topPosts[0].permalink;
+          if (SCRAPER_URL && topIsYouTube) {
+            $("scrapeTopVideo").style.display = "block";
+            $("scrapeTopVideo").onclick = () => {
+              window.open(`${SCRAPER_URL}/?url=${encodeURIComponent(topPosts[0].permalink)}`, "_blank");
+            };
+          } else {
+            $("scrapeTopVideo").style.display = "none";
+          }
 
           if (notes.length) {
             $("notesBox").style.display = "block";

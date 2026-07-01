@@ -56,6 +56,22 @@ can call `/api/clients` and `/run` cross-origin. Unset defaults to `*` — fine 
 down before this is load-bearing in production. This app's own same-origin page is unaffected either
 way.
 
+## The flywheel cross-link to the Comment Scraper
+
+This app and `ziggurat-comment-scraper` are **separate repos, separate Railway deploys, separate
+URLs** — deliberately not merged. They're tied together at the UI layer with plain links carrying
+context via query params, not a shared frontend:
+
+- **Analytics → scraper:** set `SCRAPER_URL` to the scraper frontend's URL. The Result screen's
+  "Scrape top video" link opens `<scraper-url>/?url=<video-url>` for the top YouTube post, in a new
+  tab, prefilling the scraper's form.
+- **Scraper → Analytics:** already built on the scraper side (`VITE_ANALYTICS_URL`) — it opens
+  `<this-app-url>/?client=<slug>`. This page reads `?client=` on load and preselects that client's
+  dropdown if the slug is recognised; unrecognised or missing slug just falls back to the default,
+  never errors.
+
+Neither hop is required — unset either env var and that link/behaviour simply doesn't appear.
+
 ## Architecture
 `core/build_workbook.py` is the single source of truth — the SAME file the analytics-engine skill
 uses. The web app and the skill both call `run_build()`, so scoring logic never forks.
