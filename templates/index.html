@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ziggurat Analytics Engine</title>
 <style>
-  :root { --accent: #2A4A44; --bg: #faf9f7; --line: #e3e0db; --ink: #1d1d1b; --muted: #6b6b66; }
+  :root { --accent: #2A4A44; --bg: #faf9f7; --line: #e3e0db; --ink: #1d1d1b; --muted: #6b6b66; --yt: #CC0000; --meta: #2A4A44; }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, Arial, sans-serif; background: var(--bg); color: var(--ink);
          margin: 0; padding: 2.5rem 1rem; line-height: 1.5; }
@@ -23,6 +23,13 @@
   .drop input { display: none; }
   .drop.filled { border-style: solid; border-color: var(--accent); color: var(--ink); }
   .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .6rem; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+  .section-divider { border: 0; border-top: 1px solid var(--line); margin: 1.4rem 0 .2rem; }
+  .platform-label { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+                    color: var(--muted); margin: 1.1rem 0 .35rem; }
+  .platform-label.yt { color: var(--yt); }
+  .drop.yt-drop { border-color: #f5c6c6; }
+  .drop.yt-drop:hover { border-color: var(--yt); }
   button { margin-top: 1.75rem; width: 100%; padding: .8rem; background: var(--accent); color: #fff;
            border: 0; border-radius: 9px; font-size: 1rem; font-weight: 600; cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
@@ -31,29 +38,61 @@
   .msg.ok { background: #eaf6ec; color: #1b5e2a; display: block; }
   details { margin-top: 1.25rem; font-size: .85rem; color: var(--muted); }
   summary { cursor: pointer; }
+  .platform-badges { display: flex; gap: .4rem; margin: .5rem 0 0; flex-wrap: wrap; min-height: 1.6rem; }
+  .badge { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .6rem;
+           border-radius: 20px; font-size: .75rem; font-weight: 700; letter-spacing: .04em;
+           text-transform: uppercase; border: 1.5px solid; transition: opacity .15s; }
+  .badge.meta-on  { background: #e8f2ef; color: var(--meta); border-color: var(--meta); }
+  .badge.meta-off { background: #f4f4f2; color: var(--muted); border-color: var(--line); opacity: .5; }
+  .badge.yt-on    { background: #fdeaea; color: var(--yt);   border-color: #f5a0a0; }
+  .badge.yt-off   { background: #f4f4f2; color: var(--muted); border-color: var(--line); opacity: .5; }
 </style>
 </head>
 <body>
 <div class="card">
   <h1>Analytics Engine</h1>
-  <p class="sub">Upload a month of Meta exports, pick the client, download the scored workbook.</p>
+  <p class="sub">Upload a month of exports (Meta and/or YouTube), pick the client, download the scored workbook.</p>
 
   <label>Client</label>
   <select id="client">
     {% for c in clients %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
     <option value="__upload__">— Upload a config instead —</option>
   </select>
+  <div class="platform-badges" id="platformBadges"></div>
 
   <div id="configRow" style="display:none">
     <label>Config file <span class="hint">(a *-analytics-config.md)</span></label>
     <label class="drop" id="dropConfig">Choose config…<input type="file" id="config" accept=".md"></label>
   </div>
 
-  <label>CSV exports <span class="hint">— add whichever you have</span></label>
+  <p class="platform-label">Meta exports</p>
   <div class="row3">
     <label class="drop" id="dropFb">Facebook<input type="file" id="fb" accept=".csv"></label>
     <label class="drop" id="dropIg">Instagram<input type="file" id="ig" accept=".csv"></label>
     <label class="drop" id="dropStories">Stories<input type="file" id="stories" accept=".csv"></label>
+  </div>
+
+  <hr class="section-divider">
+  <p class="platform-label yt">YouTube Studio exports</p>
+  <p style="font-size:.82rem;color:var(--muted);margin:.2rem 0 .6rem">
+    Export from: YouTube Studio → Content → Analytics → Advanced mode → Export.<br>
+    Upload the <strong>Table data.csv</strong>. Shorts and Long-form are split automatically by duration.
+  </p>
+  <div class="row2">
+    <label class="drop yt-drop" id="dropYt">
+      Table data.csv (all content)
+      <input type="file" id="yt" accept=".csv">
+    </label>
+    <div style="display:flex;flex-direction:column;gap:.6rem">
+      <label class="drop yt-drop" id="dropYtShorts" style="flex:1">
+        Shorts only
+        <input type="file" id="yt_shorts" accept=".csv">
+      </label>
+      <label class="drop yt-drop" id="dropYtLongform" style="flex:1">
+        Long-form only
+        <input type="file" id="yt_longform" accept=".csv">
+      </label>
+    </div>
   </div>
 
   <label>Month <span class="hint">(optional — auto-detected if blank)</span></label>
@@ -74,10 +113,36 @@
   const $ = id => document.getElementById(id);
   const client = $("client"), configRow = $("configRow"), msg = $("msg"), go = $("go");
 
-  client.onchange = () => configRow.style.display = client.value === "__upload__" ? "block" : "none";
+  // Per-client platform map injected from Flask — used to show upload guidance badges.
+  const clientPlatforms = {{ client_platforms | tojson }};
+  const META_PLATS = new Set(["instagram", "facebook", "stories"]);
+  const YT_PLATS   = new Set(["youtube", "youtube_shorts", "youtube_longform"]);
+
+  function updateBadges() {
+    const badges = $("platformBadges");
+    badges.innerHTML = "";
+    if (client.value === "__upload__") return;
+    const plats = clientPlatforms[client.value] || [];
+    const hasMeta = plats.some(p => META_PLATS.has(p));
+    const hasYT   = plats.some(p => YT_PLATS.has(p));
+    badges.innerHTML = `
+      <span class="badge ${hasMeta ? 'meta-on' : 'meta-off'}" title="${hasMeta ? 'Meta exports active for this client' : 'Meta not configured for this client'}">
+        Meta
+      </span>
+      <span class="badge ${hasYT ? 'yt-on' : 'yt-off'}" title="${hasYT ? 'YouTube exports active for this client' : 'YouTube not configured for this client'}">
+        YouTube
+      </span>
+    `;
+  }
+
+  client.onchange = () => {
+    configRow.style.display = client.value === "__upload__" ? "block" : "none";
+    updateBadges();
+  };
+  updateBadges(); // populate on page load
 
   // reflect chosen filenames on the drop labels
-  ["fb","ig","stories","config"].forEach(id => {
+  ["fb","ig","stories","yt","yt_shorts","yt_longform","config"].forEach(id => {
     const input = $(id); if (!input) return;
     input.onchange = () => {
       const label = input.closest(".drop");
@@ -91,10 +156,12 @@
     const fd = new FormData();
     fd.append("client", client.value);
     fd.append("month", $("month").value);
-    ["fb","ig","stories","config"].forEach(id => {
+    ["fb","ig","stories","yt","yt_shorts","yt_longform","config"].forEach(id => {
       const f = $(id); if (f && f.files.length) fd.append(id, f.files[0]);
     });
-    if (!$("fb").files.length && !$("ig").files.length && !$("stories").files.length) {
+    const hasAny = ["fb","ig","stories","yt","yt_shorts","yt_longform"]
+                     .some(id => $(id) && $(id).files.length);
+    if (!hasAny) {
       msg.className = "msg err"; msg.textContent = "Add at least one CSV."; return;
     }
     go.disabled = true; go.textContent = "Building…";

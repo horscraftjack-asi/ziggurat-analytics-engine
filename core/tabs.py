@@ -181,12 +181,13 @@ def build_empty_special_tab(wb, name, month, note):
 # ----------------------------------------------------------------------------------------------
 def _title(post, limit=65):
     import pandas as pd
-    src = post.get("Title") or post.get("Description") or ""
+    # Meta exports use "Description"; YouTube exports use "Video title"
+    src = post.get("Video title") or post.get("Title") or post.get("Description") or ""
     if src is None or (isinstance(src, float) and pd.isna(src)):
         src = ""
     line = str(src).strip().split("\n")[0]
     if not line or line.lower() == "nan":
-        return "(no description)"
+        return "(no title)"
     return line if len(line) <= limit else line[:limit] + "…"
 
 
@@ -379,7 +380,8 @@ def _pct(part, total):
     return f"{part:,.0f}  ({part / total * 100:.0f}%)" if total else f"{part:,.0f}  (0%)"
 
 
-def build_footnotes(wb, cfg, month, ig_df=None, fb_df=None, st_df=None, insights=None):
+def build_footnotes(wb, cfg, month, ig_df=None, fb_df=None, st_df=None,
+                    yt_shorts_df=None, yt_longform_df=None, insights=None):
     """Data tables are computed and written; insight sections are shells unless `insights` given."""
     ws = wb.create_sheet(title="Footnotes & Insights")
     ws.column_dimensions["A"].width = 30
@@ -446,6 +448,46 @@ def build_footnotes(wb, cfg, month, ig_df=None, fb_df=None, st_df=None, insights
             r += 1
         r += 1
 
+    # YouTube breakdowns
+    YT_HDR = "CC0000"   # YouTube red header
+    for yt_df, label in ((yt_shorts_df, "YouTube Shorts Breakdown"),
+                         (yt_longform_df, "YouTube Long-form Breakdown")):
+        if yt_df is None or len(yt_df) == 0:
+            continue
+        import pandas as pd
+        _section_header(ws, r, label, YT_HDR, span=3); r += 1
+        for c, h in enumerate(["Metric", month, "—"], start=1):
+            _hdr_cell(ws, r, c, h, YT_HDR)
+        r += 1
+        n_yt = len(yt_df)
+        def yts(col):
+            return pd.to_numeric(yt_df[col], errors="coerce").fillna(0).sum() if col in yt_df.columns else 0
+        def yta(col):
+            return yts(col) / n_yt if n_yt else 0
+        yt_rows = [
+            ("Videos published",              n_yt,                           "count"),
+            ("Total Views",                   yts("Views"),                   "sum"),
+            ("Total Watch time (hours)",      yts("Watch time (hours)"),      "sum"),
+            ("Total Subscribers gained",      yts("Subscribers"),             "sum"),
+            ("Total Impressions",             yts("Impressions"),             "sum"),
+            ("Avg Impressions CTR (%)",       yta("Impressions CTR"),         "avg"),
+            ("Total Revenue (USD)",           yts("Estimated revenue (USD)"), "sum"),
+            ("Avg Views/video",               yta("Views"),                   "avg"),
+            ("Avg Watch time/video (hours)",  yta("Watch time (hours)"),      "avg"),
+        ]
+        for row_label, v, kind in yt_rows:
+            ws.cell(r, 1, row_label).fill = _fill(C["label_bg"])
+            ws.cell(r, 1).font = Font(name=ARIAL, bold=True, size=12)
+            if kind == "count":
+                txt = str(int(v))
+            elif kind == "avg":
+                txt = f"{v:.2f}"
+            else:
+                txt = f"{v:,.2f}" if isinstance(v, float) and v != int(v) else f"{int(v):,}"
+            ws.cell(r, 2, txt).fill = _fill(C["label_bg"])
+            r += 1
+        r += 1
+
     # Insight shells — the model fills these (or `insights` if pre-written)
     for title, bg, default_n in [("What Worked", C["post_hdr"], 4),
                                   ("What Didn't Work", C["total_hdr"], 3),
@@ -466,7 +508,8 @@ def build_footnotes(wb, cfg, month, ig_df=None, fb_df=None, st_df=None, insights
     return ws
 
 
-def build_summary(wb, cfg, month, ig_df=None, fb_df=None, st_df=None, insights=None, extra_note=None):
+def build_summary(wb, cfg, month, ig_df=None, fb_df=None, st_df=None,
+                  yt_shorts_df=None, yt_longform_df=None, insights=None, extra_note=None):
     import pandas as pd
     ws = wb.create_sheet(title="Summary & Strategy")
     ws.column_dimensions["A"].width = 30
@@ -527,7 +570,205 @@ def build_summary(wb, cfg, month, ig_df=None, fb_df=None, st_df=None, insights=N
     else:
         ws.cell(r, 1, "[3–4 numbered focus areas — to be written]").font = Font(name=ARIAL, italic=True, size=11, color="FF999999")
         r += 1
+    # YouTube summary rows — appended below Meta snapshot if YouTube data is present
+    yt_combined = []
+    if yt_shorts_df is not None and len(yt_shorts_df):
+        yt_combined.append(("Shorts", yt_shorts_df))
+    if yt_longform_df is not None and len(yt_longform_df):
+        yt_combined.append(("Long-form", yt_longform_df))
+    if yt_combined:
+        import pandas as pd
+        r += 1
+        _section_header(ws, r, "YouTube Snapshot", "CC0000"); r += 1
+        for c, h in enumerate(["Shorts", "Long-form", "Combined"], start=2):
+            _hdr_cell(ws, r, c, h, "CC0000")
+        r += 1
+        def ys(df, col):
+            return pd.to_numeric(df[col], errors="coerce").fillna(0).sum() if df is not None and col in df.columns else 0
+        sh_df = yt_shorts_df if yt_shorts_df is not None and len(yt_shorts_df) else None
+        lf_df = yt_longform_df if yt_longform_df is not None and len(yt_longform_df) else None
+        sh_n = len(sh_df) if sh_df is not None else 0
+        lf_n = len(lf_df) if lf_df is not None else 0
+        yt_snap = [
+            ("Videos",            sh_n,                                lf_n,                                sh_n + lf_n,                                                 "plain"),
+            ("Total Views",       ys(sh_df, "Views"),                  ys(lf_df, "Views"),                  ys(sh_df, "Views") + ys(lf_df, "Views"),                     "comma"),
+            ("Watch time (hrs)",  ys(sh_df, "Watch time (hours)"),     ys(lf_df, "Watch time (hours)"),     ys(sh_df, "Watch time (hours)") + ys(lf_df, "Watch time (hours)"), "plain"),
+            ("Subscribers",       ys(sh_df, "Subscribers"),            ys(lf_df, "Subscribers"),            ys(sh_df, "Subscribers") + ys(lf_df, "Subscribers"),          "plain"),
+            ("Revenue (USD)",     ys(sh_df, "Estimated revenue (USD)"), ys(lf_df, "Estimated revenue (USD)"), ys(sh_df, "Estimated revenue (USD)") + ys(lf_df, "Estimated revenue (USD)"), "plain"),
+            ("Avg CTR (%)",       ys(sh_df, "Impressions CTR") / sh_n if sh_n else 0,
+                                  ys(lf_df, "Impressions CTR") / lf_n if lf_n else 0,
+                                  (ys(sh_df, "Impressions CTR") + ys(lf_df, "Impressions CTR")) / (sh_n + lf_n) if (sh_n + lf_n) else 0, "plain"),
+        ]
+        for label, sh_v, lf_v, comb, fmt in yt_snap:
+            ws.cell(r, 1, label).fill = _fill(C["label_bg"])
+            ws.cell(r, 1).font = Font(name=ARIAL, bold=True, size=12)
+            for c, v in enumerate([sh_v, lf_v, comb], start=2):
+                txt = f"{v:,.0f}" if fmt == "comma" else (f"{v:.2f}" if isinstance(v, float) and v != int(v) else f"{int(v)}")
+                ws.cell(r, c, txt).fill = _fill(C["label_bg"])
+            r += 1
+
     if extra_note:
         r += 1
         ws.cell(r, 1, extra_note).font = Font(name=ARIAL, italic=True, size=10)
+    return ws
+
+
+# ----------------------------------------------------------------------------------------------
+# YouTube tabs — Shorts and Long-form share the same builder, differentiated by `kind`
+# ----------------------------------------------------------------------------------------------
+YT_RED = "CC0000"   # YouTube header colour
+
+
+def _yt_note(post):
+    """Performance note for a YouTube video row."""
+    import pandas as pd
+    note_parts = []
+    rank = int(post.get("Overall Rank", 0))
+    ctr = post.get("Impressions CTR")
+    subs = post.get("Subscribers")
+
+    if rank == 1:
+        note_parts.append("Top performer this month.")
+    if pd.notna(ctr) and ctr != "":
+        ctr_val = float(ctr)
+        if ctr_val >= 8:
+            note_parts.append(f"CTR {ctr_val:.1f}% — strong click-through.")
+        elif ctr_val < 3:
+            note_parts.append(f"CTR {ctr_val:.1f}% — below typical threshold; review thumbnail/title.")
+    if pd.notna(subs) and subs != "" and int(float(subs)) > 0:
+        note_parts.append(f"+{int(float(subs))} subscribers.")
+    return "  ".join(note_parts) or None
+
+
+def build_youtube_tab(wb, df, cfg, month, kind):
+    """Build a YouTube Shorts or Long-form performance tab.
+
+    kind: "youtube_shorts" | "youtube_longform"
+    df:   scored dataframe from score_posts() — already has Total Score, Overall Rank,
+          Score:<metric> columns, sorted by Overall Rank ascending.
+
+    No CTA columns — YouTube Studio Table data exports don't include description text.
+    Duration shown as MM:SS. Revenue shown as a passthrough column if present.
+    """
+    import pandas as pd
+
+    tab_titles = {
+        "youtube_shorts":   f"YouTube Shorts — {month}",
+        "youtube_longform": f"YouTube Long-form — {month}",
+    }
+    ws = wb.create_sheet(title=tab_titles.get(kind, f"YouTube — {month}"))
+
+    metrics = cfg.metrics.get(kind, [])
+    n = len(df)
+    top_n, bottom_n = 5, 5
+    has_revenue = "Estimated revenue (USD)" in df.columns
+
+    # --- column plan ---
+    cols = [("#", "num"), ("Video Title", "title"), ("Duration", "duration"), ("Date Published", "date")]
+    if has_revenue:
+        cols.append(("Revenue (USD)", "revenue"))
+    cols += [(m, "raw") for m in metrics]
+    cols += [(f"Score: {m}", "score") for m in metrics]
+    cols += [("Total Score", "total"), ("Overall Rank", "rank"),
+             ("Performance Note", "note"), ("Permalink", "permalink")]
+
+    widths = {
+        "num": 4, "title": 46, "duration": 9, "date": 14, "revenue": 13,
+        "raw": 11, "score": 9, "total": 12, "rank": 11, "note": 42, "permalink": 30,
+    }
+
+    # --- headers (row 1) ---
+    for i, (label, col_kind) in enumerate(cols, start=1):
+        if col_kind == "raw":    bg = C["metric_hdr"]
+        elif col_kind == "score": bg = C["score_hdr"]
+        elif label in ("Total Score", "Overall Rank"): bg = C["total_hdr"]
+        elif col_kind == "revenue": bg = C["summary_hdr"]
+        else: bg = YT_RED
+        _hdr_cell(ws, 1, i, label, bg)
+        ws.column_dimensions[get_column_letter(i)].width = widths.get(col_kind, 11)
+
+    # --- data rows ---
+    for ridx, (_, post) in enumerate(df.iterrows()):
+        r = ridx + 2
+        rank = int(post["Overall Rank"])
+        in_top    = ridx < top_n
+        in_bottom = ridx >= n - bottom_n
+        base = C["top"] if in_top else C["bottom"] if in_bottom else (C["alt"] if ridx % 2 else C["white"])
+
+        for i, (label, col_kind) in enumerate(cols, start=1):
+            cell = ws.cell(r, i)
+            cell.font = Font(name=ARIAL, size=10)
+            cell.border = BORDER
+            cell.fill = _fill(base)
+            cell.alignment = Alignment(vertical="center", horizontal="left")
+
+            if col_kind == "num":
+                cell.value = rank
+
+            elif col_kind == "title":
+                cell.value = _title(post)
+                col_color = C["top_title"] if in_top else C["bottom_title"] if in_bottom else "000000"
+                cell.font = Font(name=ARIAL, size=10, bold=(in_top or in_bottom), color="FF" + col_color)
+
+            elif col_kind == "duration":
+                dur_raw = post.get("Duration")
+                if pd.notna(dur_raw) and dur_raw != "":
+                    dur_s = int(float(dur_raw))
+                    cell.value = f"{dur_s // 60}:{dur_s % 60:02d}"
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            elif col_kind == "date":
+                cell.value = _date(post.get("Publish time"))
+
+            elif col_kind == "revenue":
+                rev = post.get("Estimated revenue (USD)")
+                if pd.notna(rev) and rev != "":
+                    cell.value = round(float(rev), 2)
+                    cell.number_format = "$#,##0.00"
+                cell.fill = _fill(C["score_bg"])
+
+            elif col_kind == "raw":
+                val = post.get(label)
+                if pd.notna(val) and val != "":
+                    # CTR is already a percentage float — display with 2dp
+                    cell.value = round(float(val), 2) if "CTR" in label else _num(val)
+
+            elif col_kind == "score":
+                cell.value = int(post.get(label, 0))
+                cell.fill = _fill(C["score_bg"])
+
+            elif label == "Total Score":
+                cell.value = int(post["Total Score"])
+                cell.fill = _fill(C["total_bg"])
+
+            elif label == "Overall Rank":
+                cell.value = rank
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                if rank == 1:
+                    cell.fill = _fill(C["rank1"])
+                    cell.font = Font(name=ARIAL, size=10, bold=True, color="FFFFFFFF")
+                elif in_top:
+                    cell.fill = _fill(C["top"])
+                    cell.font = Font(name=ARIAL, size=10, bold=True)
+                elif in_bottom:
+                    cell.fill = _fill(C["bottom"])
+                    cell.font = Font(name=ARIAL, size=10, bold=True)
+
+            elif label == "Performance Note":
+                note = _yt_note(post)
+                if note:
+                    cell.value = note
+                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+                    ws.row_dimensions[r].height = 36
+
+            elif label == "Permalink":
+                url = post.get("Permalink", "")
+                if url and str(url).startswith("http"):
+                    cell.value = url
+                    cell.hyperlink = url
+                    cell.font = Font(name=ARIAL, size=10, color="FF2C4A8C", underline="single")
+
+    # Freeze panes at the first raw metric column
+    raw_idx = next((i + 1 for i, (_, k) in enumerate(cols) if k == "raw"), len(cols))
+    ws.freeze_panes = f"{get_column_letter(raw_idx)}2"
     return ws

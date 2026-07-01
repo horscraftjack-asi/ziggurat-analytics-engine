@@ -21,7 +21,7 @@ client_name: Chris Young
 client_slug: chrisyoung
 brand_accent_hex: #D9291C
 output_filename: ChrisYoung_[MonthYear]_Performance.xlsx
-platforms_active: [instagram, facebook]
+platforms_active: [instagram, facebook, youtube]
 ```
 
 *Note: brand_accent_hex is a working estimate (Combustion red). Confirm with Jack.*
@@ -97,6 +97,26 @@ awareness plays; they build trust and authority but do not drive action.
 
 ---
 
+### YouTube
+
+- **Primary function:** The primary content surface. YouTube is where Chris's analytical reputation
+  lives — long-form demonstrations, tests, and breakdowns that social and newsletter funnel toward.
+  Short-form (Shorts ≤60s) serve as entry hooks and curiosity drivers; long-form (>60s) are the
+  main content product.
+- **Shorts — what good looks like:** Views above 300,000 = strong discovery · Impressions CTR
+  above 7% = title/thumbnail compelling within the feed · Subscribers gained on a Short = new
+  audience entering the long-form ecosystem.
+- **Long-form — what good looks like:** Views above 100,000 = solid discovery for the niche ·
+  Watch time (hours) high relative to Views = audience completing the video (depth signal) ·
+  Impressions CTR above 6% = strong title/thumbnail pairing · Subscribers gained = new ecosystem
+  entrants drawn by the analytical content.
+- **What to flag:** Shorts with high Views but low Impressions CTR (distributing well but
+  thumbnail/title underperforming in the feed) · Long-form with low Watch time relative to Views
+  (audience dropping off — hook or pacing issue) · Low Subscribers gained across both formats
+  (reach not converting to retained audience).
+
+---
+
 ## 5. Detection rules
 
 ### 5a. CTA detection
@@ -129,6 +149,12 @@ special_content: []
 
 **Facebook (score these):** Views, Reach, Reactions, Comments, Shares, Total clicks, Link clicks.
 - *Exclude:* `Reactions, comments and shares` — a lump sum of metrics already scored above.
+
+**YouTube Shorts (score these):** Views, Impressions, Impressions CTR, Subscribers.
+- *Note: Watch time is excluded for Shorts — duration ≤60s makes cumulative watch time a Views proxy rather than a depth signal. Revenue (Estimated revenue (USD)) is displayed as a passthrough column but not scored.*
+
+**YouTube Long-form (score these):** Views, Watch time (hours), Impressions, Impressions CTR, Subscribers.
+- *Note: Watch time is the primary depth signal for long-form content — Chris's audience watches in full when the analytical hook is strong. Revenue (Estimated revenue (USD)) is displayed as a passthrough column but not scored.*
 
 ---
 

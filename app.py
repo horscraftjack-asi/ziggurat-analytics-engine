@@ -24,13 +24,17 @@ def available_clients():
     clients = []
     for path in sorted(glob.glob(os.path.join(CONFIG_DIR, "*-analytics-config.md"))):
         cfg = bw.parse_config(path)
-        clients.append({"slug": cfg.client_slug, "name": cfg.client_name, "path": path})
+        clients.append({"slug": cfg.client_slug, "name": cfg.client_name, "path": path,
+                        "platforms_active": cfg.platforms_active})
     return clients
 
 
 @app.route("/")
 def index():
-    return render_template("index.html", clients=available_clients())
+    clients = available_clients()
+    # Build a slug -> platforms_active map for the frontend badge logic
+    client_platforms = {c["slug"]: c["platforms_active"] for c in clients}
+    return render_template("index.html", clients=clients, client_platforms=client_platforms)
 
 
 @app.route("/run", methods=["POST"])
@@ -49,16 +53,23 @@ def run():
     else:
         return jsonify({"error": "No config: pick a client or upload a config file."}), 400
 
-    # Save whichever CSVs were provided
+    # Save whichever CSVs were provided (Meta + YouTube)
     paths = {}
-    for field, plat in (("fb", "facebook"), ("ig", "instagram"), ("stories", "stories")):
+    for field, plat in (
+        ("fb",          "facebook"),
+        ("ig",          "instagram"),
+        ("stories",     "stories"),
+        ("yt",          "youtube"),          # combined YT Table data — auto-split by Duration
+        ("yt_shorts",   "youtube_shorts"),   # pre-split Shorts export
+        ("yt_longform", "youtube_longform"), # pre-split long-form export
+    ):
         f = request.files.get(field)
         if f and f.filename:
             p = os.path.join(workdir, f"{field}.csv")
             f.save(p)
             paths[plat] = p
     if not paths:
-        return jsonify({"error": "Upload at least one CSV (Facebook, Instagram, or Stories)."}), 400
+        return jsonify({"error": "Upload at least one CSV (Facebook, Instagram, Stories, or YouTube)."}), 400
 
     # Drive the same core the skill uses. run_build() is a thin wrapper we add to the core
     # so both the CLI and the web app call one function rather than re-implementing main().

@@ -10,16 +10,19 @@ identical for every client.
 This is the deterministic half of the analytics-engine skill. The written insight tabs
 (Footnotes & Insights, Summary & Strategy) are left as labelled shells for the model to fill.
 
-Scaffold status:
-  IMPLEMENTED   config parsing, platform detection, column validation, CTA/trigger extraction,
-                special-content split, rank-order scoring (standard competition ranking), sparsity rule.
-  STUBBED       openpyxl tab construction + styling — structured with the spec encoded, to be
-                fleshed out tab-by-tab against real CSVs during the test phase.
+Supported platforms:
+  Meta:    facebook, instagram, stories
+  YouTube: youtube  (auto-split into youtube_shorts ≤60s and youtube_longform >60s)
+           Or upload pre-split: youtube_shorts, youtube_longform separately.
 
 Usage:
   python build_workbook.py --config chefsteps-analytics-config.md \
       --ig instagram.csv --fb facebook.csv --stories stories.csv \
       --out /mnt/user-data/outputs/ [--month "May 2026"] [--validate-only]
+
+  python build_workbook.py --config chrisyoung-analytics-config.md \
+      --yt youtube_table_data.csv \
+      --out /mnt/user-data/outputs/
 """
 
 from __future__ import annotations
@@ -70,10 +73,56 @@ STYLE = {
 }
 
 PLATFORM_FINGERPRINTS = {  # column unique to each platform, for auto-mapping an unlabelled CSV
-    "facebook": {"Reactions", "Total clicks", "Link clicks"},
+    "facebook":  {"Reactions", "Total clicks", "Link clicks"},
     "instagram": {"Likes", "Saves", "Follows"},
-    "stories": {"Profile visits", "Navigation"},
+    "stories":   {"Profile visits", "Navigation"},
+    # YouTube fingerprint matched AFTER normalize_youtube() renames columns
+    "youtube":   {"Watch time (hours)", "Impressions CTR", "Subscribers"},
 }
+
+# --------------------------------------------------------------------------------------------------
+# YouTube Studio — column normalisation
+# YouTube Studio's "Table data" CSV export (Content > Analytics > Advanced mode > Export)
+# uses human-readable column names. This map renames them to engine-friendly keys.
+# --------------------------------------------------------------------------------------------------
+YT_COLUMN_MAP = {
+    "Content":                              "Video ID",
+    "Video publish time":                   "Publish time",
+    "Impressions click-through rate (%)":   "Impressions CTR",
+    # These pass through unchanged:
+    #   Video title, Duration, Views, Watch time (hours),
+    #   Subscribers, Estimated revenue (USD), Impressions
+}
+
+YT_SHORTS_THRESHOLD = 60   # seconds — videos ≤ this are classified as Shorts
+
+
+def normalize_youtube(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename YouTube Studio export columns, strip the aggregate Total row, build Permalink."""
+    df = df.rename(columns={k: v for k, v in YT_COLUMN_MAP.items() if k in df.columns})
+    # Strip summary row — YouTube Studio inserts a grand-total row with Content/Video ID == "Total"
+    id_col = "Video ID" if "Video ID" in df.columns else None
+    if id_col:
+        df = df[df[id_col].fillna("") != "Total"].copy()
+    df = df.dropna(subset=["Video title"] if "Video title" in df.columns else []).copy()
+    # Construct clickable permalink from the video ID
+    if "Video ID" in df.columns:
+        df["Permalink"] = df["Video ID"].apply(
+            lambda v: f"https://youtube.com/watch?v={v}" if pd.notna(v) else "")
+    return df.reset_index(drop=True)
+
+
+def split_youtube_by_duration(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split a combined YouTube export into Shorts (≤60 s) and long-form (>60 s).
+
+    Returns (shorts_df, longform_df). Either may be empty if no videos fall in that bucket.
+    If Duration column is absent, everything lands in longform with a note.
+    """
+    if "Duration" not in df.columns:
+        return pd.DataFrame(columns=df.columns), df.copy()
+    dur = pd.to_numeric(df["Duration"], errors="coerce").fillna(0)
+    mask = dur <= YT_SHORTS_THRESHOLD
+    return df[mask].copy().reset_index(drop=True), df[~mask].copy().reset_index(drop=True)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -144,8 +193,14 @@ def parse_config(path: str) -> Config:
     cfg.platforms_active = _list_inline(ident, "platforms_active")
 
     # Metrics to score: parsed from §6 prose lines "**Platform (score these):** a, b, c".
-    for plat, label in [("instagram", "Instagram"), ("facebook", "Facebook"), ("stories", "Stories")]:
-        m = re.search(rf"\*\*{label}\s*\(score these\):\*\*\s*(.+)", text)
+    for plat, label in [
+        ("instagram",        "Instagram"),
+        ("facebook",         "Facebook"),
+        ("stories",          "Stories"),
+        ("youtube_shorts",   "YouTube Shorts"),
+        ("youtube_longform", "YouTube Long-form"),
+    ]:
+        m = re.search(rf"\*\*{re.escape(label)}\s*\(score these\):\*\*\s*(.+)", text)
         if m:
             cfg.metrics[plat] = [x.strip().strip("`.") for x in re.split(r"[,.]", m.group(1)) if x.strip()]
     # Exclusions are noted in prose; the well-known ones are encoded as defaults the build applies.
@@ -179,9 +234,13 @@ def detect_platform(df: pd.DataFrame) -> str | None:
 def validate_columns(df: pd.DataFrame, platform: str, cfg: Config) -> list:
     """Return list of expected-but-missing columns; empty list = OK."""
     needed = set(cfg.metrics.get(platform, []))
-    needed |= {"Description", "Permalink", "Publish time"}
-    if platform != "stories":
-        needed |= {"Post type"}
+    if platform in ("youtube_shorts", "youtube_longform"):
+        # YouTube exports have no Description or Post type — just title, publish time, duration
+        needed |= {"Video title", "Publish time", "Duration"}
+    else:
+        needed |= {"Description", "Permalink", "Publish time"}
+        if platform != "stories":
+            needed |= {"Post type"}
     return sorted(needed - set(df.columns))
 
 
@@ -289,6 +348,12 @@ def build_workbook(tables: dict, cfg: Config, month: str, out_dir: str, notes: l
     if "stories" in tables:
         tabs.build_stories_tab(wb, tables["stories"], cfg, month)
 
+    # YouTube tabs — Shorts before Long-form so the team's focus content is first
+    if "youtube_shorts" in tables:
+        tabs.build_youtube_tab(wb, tables["youtube_shorts"], cfg, month, kind="youtube_shorts")
+    if "youtube_longform" in tables:
+        tabs.build_youtube_tab(wb, tables["youtube_longform"], cfg, month, kind="youtube_longform")
+
     extra = []
     n_special = sum(len(tables.get(sc["name"], [])) for sc in cfg.special_content)
     extra.append(f"{n_special} {cfg.special_content[0]['name'] if cfg.special_content else 'special'} detected this month."
@@ -298,11 +363,17 @@ def build_workbook(tables: dict, cfg: Config, month: str, out_dir: str, notes: l
     tabs.build_footnotes(wb, cfg, month,
                          ig_df=breakdown_frames.get("instagram"),
                          fb_df=breakdown_frames.get("facebook"),
-                         st_df=tables.get("stories"), insights=insights)
+                         st_df=tables.get("stories"),
+                         yt_shorts_df=tables.get("youtube_shorts"),
+                         yt_longform_df=tables.get("youtube_longform"),
+                         insights=insights)
     tabs.build_summary(wb, cfg, month,
                        ig_df=breakdown_frames.get("instagram"),
                        fb_df=breakdown_frames.get("facebook"),
-                       st_df=tables.get("stories"), insights=insights,
+                       st_df=tables.get("stories"),
+                       yt_shorts_df=tables.get("youtube_shorts"),
+                       yt_longform_df=tables.get("youtube_longform"),
+                       insights=insights,
                        extra_note="Note: " + " ".join(x for x in extra if x))
 
     os.makedirs(out_dir, exist_ok=True)
@@ -314,11 +385,15 @@ def build_workbook(tables: dict, cfg: Config, month: str, out_dir: str, notes: l
 # Orchestration
 # ----------------------------------------------------------------------------------------------
 def infer_month(dfs: list) -> str:
+    """Infer the report month from the most recent publish date across all provided dataframes.
+    Handles both Meta ISO timestamps and YouTube's 'Jun 13, 2026' format via pandas' flexible parser.
+    """
     for df in dfs:
-        if "Publish time" in df.columns:
-            t = pd.to_datetime(df["Publish time"], errors="coerce").dropna()
+        col = next((c for c in ("Publish time",) if c in df.columns), None)
+        if col:
+            t = pd.to_datetime(df[col], errors="coerce").dropna()
             if len(t):
-                return t.iloc[0].strftime("%B %Y")
+                return t.max().strftime("%B %Y")
     return "Unknown Month"
 
 
@@ -327,13 +402,20 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
     """Shared orchestration used by BOTH the CLI and the web app — one source of truth.
 
     config_path: path to a [client]-analytics-config.md
-    csv_paths:   {"facebook": path, "instagram": path, "stories": path} — include only what you have
+    csv_paths:   {
+                   "facebook": path, "instagram": path, "stories": path,  # Meta
+                   "youtube": path,           # combined YT export — auto-split by Duration
+                   "youtube_shorts": path,    # pre-split Shorts export (optional)
+                   "youtube_longform": path,  # pre-split long-form export (optional)
+                 }
+                 Include only what you have. Meta and YouTube can be mixed freely.
     Returns a report dict. Raises MissingColumns if any expected column is absent.
     """
     cfg = parse_config(config_path)
     report = {"client": cfg.client_name, "platforms_active": cfg.platforms_active,
               "validation": {}, "notes": []}
 
+    # --- Meta platforms ---
     dfs = {}
     for plat in ("facebook", "instagram", "stories"):
         path = csv_paths.get(plat)
@@ -351,6 +433,38 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
         report["validation"][plat] = {"missing_columns": missing, "rows": len(df)}
         dfs[plat] = df
 
+    # --- YouTube platform ---
+    # Accept a combined export (auto-split by Duration) OR pre-split separate files.
+    yt_shorts_df: pd.DataFrame | None = None
+    yt_longform_df: pd.DataFrame | None = None
+
+    yt_combined_path = csv_paths.get("youtube")
+    yt_shorts_path   = csv_paths.get("youtube_shorts")
+    yt_longform_path = csv_paths.get("youtube_longform")
+
+    if yt_combined_path:
+        raw = normalize_youtube(pd.read_csv(yt_combined_path))
+        shorts, longform = split_youtube_by_duration(raw)
+        if len(shorts):
+            yt_shorts_df = shorts
+            report["notes"].append(f"YouTube auto-split: {len(shorts)} Shorts (≤{YT_SHORTS_THRESHOLD}s).")
+        if len(longform):
+            yt_longform_df = longform
+            report["notes"].append(f"YouTube auto-split: {len(longform)} long-form (>{YT_SHORTS_THRESHOLD}s).")
+    else:
+        if yt_shorts_path:
+            yt_shorts_df = normalize_youtube(pd.read_csv(yt_shorts_path))
+        if yt_longform_path:
+            yt_longform_df = normalize_youtube(pd.read_csv(yt_longform_path))
+
+    for plat, yt_df in (("youtube_shorts", yt_shorts_df), ("youtube_longform", yt_longform_df)):
+        if yt_df is None or len(yt_df) == 0:
+            continue
+        missing = validate_columns(yt_df, plat, cfg)
+        report["validation"][plat] = {"missing_columns": missing, "rows": len(yt_df)}
+        dfs[plat] = yt_df
+
+    # --- Fail loud on missing columns ---
     fatal = {p: v["missing_columns"] for p, v in report["validation"].items() if v["missing_columns"]}
     if fatal:
         raise MissingColumns(fatal)
@@ -361,7 +475,7 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
     month = month or infer_month(list(dfs.values()))
     tables = {}
 
-    # Instagram: split special content (e.g. Trial Reels) before scoring the main feed
+    # --- Score Meta ---
     if "instagram" in dfs:
         ig = dfs["instagram"]
         for sc in [s for s in cfg.special_content if s["platform"] == "instagram"]:
@@ -387,6 +501,12 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
     if "stories" in dfs:
         tables["stories"] = score_posts(dfs["stories"].copy(), cfg.metrics.get("stories", []), cfg.sparsity_threshold)
 
+    # --- Score YouTube ---
+    for plat in ("youtube_shorts", "youtube_longform"):
+        if plat in dfs:
+            yt = dfs[plat].copy()
+            tables[plat] = score_posts(yt, cfg.metrics.get(plat, []), cfg.sparsity_threshold)
+
     breakdown_frames = {"instagram": tables.get("instagram"), "facebook": tables.get("facebook")}
     out_path = build_workbook(tables, cfg, month, out_dir, report["notes"],
                               breakdown_frames=breakdown_frames)
@@ -401,12 +521,18 @@ def main():
     ap.add_argument("--fb")
     ap.add_argument("--ig")
     ap.add_argument("--stories")
+    ap.add_argument("--yt",          help="Combined YouTube Table data.csv (auto-split by Duration)")
+    ap.add_argument("--yt-shorts",   help="Pre-split YouTube Shorts export")
+    ap.add_argument("--yt-longform", help="Pre-split YouTube Long-form export")
     ap.add_argument("--month")
     ap.add_argument("--out", default="/mnt/user-data/outputs/")
     ap.add_argument("--validate-only", action="store_true")
     args = ap.parse_args()
 
-    csv_paths = {"facebook": args.fb, "instagram": args.ig, "stories": args.stories}
+    csv_paths = {
+        "facebook": args.fb, "instagram": args.ig, "stories": args.stories,
+        "youtube": args.yt, "youtube_shorts": args.yt_shorts, "youtube_longform": args.yt_longform,
+    }
     try:
         report = run_build(config_path=args.config, csv_paths=csv_paths,
                            month=args.month, out_dir=args.out, validate_only=args.validate_only)
