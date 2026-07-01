@@ -180,7 +180,7 @@
   <div class="card">
     <div class="titlebar">
       <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      <span class="breadcrumb mono" id="breadcrumb">threadline — ~/analytics</span>
+      <span class="breadcrumb mono" id="breadcrumb">eccolo — ~/analytics</span>
     </div>
     <div class="body-pad">
 
@@ -391,8 +391,8 @@
 
   function setView(name) {
     ["idle","building","result","error"].forEach(v => $("view-"+v).classList.toggle("active", v === name));
-    breadcrumb.textContent = { idle: "threadline — ~/analytics", building: "threadline — building…",
-                                result: "threadline — ~/analytics · done", error: "threadline — error" }[name];
+    breadcrumb.textContent = { idle: "eccolo — ~/analytics", building: "eccolo — building…",
+                                result: "eccolo — ~/analytics · done", error: "eccolo — error" }[name];
     $("logoGlyph").style.animation = name === "building" ? "tl-soft 1.3s ease-in-out infinite" : "";
   }
 
