@@ -508,8 +508,19 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
             tables[plat] = score_posts(yt, cfg.metrics.get(plat, []), cfg.sparsity_threshold)
 
     breakdown_frames = {"instagram": tables.get("instagram"), "facebook": tables.get("facebook")}
+
+    try:
+        from .insights import generate_insights
+    except ImportError:
+        from insights import generate_insights
+    insights = generate_insights(cfg, tables, month)
+    if insights:
+        report["notes"].append("Claude insights generated.")
+    else:
+        report["notes"].append("No Claude insights (API key absent or call failed).")
+
     out_path = build_workbook(tables, cfg, month, out_dir, report["notes"],
-                              breakdown_frames=breakdown_frames)
+                              breakdown_frames=breakdown_frames, insights=insights)
     report.update({"status": "built", "month": month, "output": out_path,
                    "counts": {k: len(v) for k, v in tables.items()}})
     return report
