@@ -515,10 +515,7 @@ def build_summary(wb, cfg, month, ig_df=None, fb_df=None, st_df=None,
     ws.column_dimensions["A"].width = 30
     ws.column_dimensions["B"].width = 60
     ws.cell(1, 1, f"{cfg.client_name} Social — Executive Summary — {month}").font = Font(name=ARIAL, bold=True, size=13)
-    insight_status = "✓ Claude insights generated" if insights else "⚠ Claude insights not generated — shells only"
-    ws.cell(2, 1, insight_status).font = Font(name=ARIAL, italic=True, size=10,
-                                              color=("FF1b5e2a" if insights else "FFcc6600"))
-    r = 4
+    r = 3
 
     _section_header(ws, r, "Combined Platform Snapshot", C["post_hdr"]); r += 1
     for c, h in enumerate(["Instagram", "Facebook", "Combined"], start=2):

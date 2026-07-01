@@ -29,14 +29,6 @@ def available_clients():
     return clients
 
 
-@app.route("/health")
-def health():
-    return jsonify({
-        "anthropic_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
-        "anthropic_key_len": len(os.environ.get("ANTHROPIC_API_KEY", "")),
-    })
-
-
 @app.route("/")
 def index():
     clients = available_clients()

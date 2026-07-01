@@ -147,19 +147,15 @@ def generate_insights(cfg, tables: dict, month: str) -> tuple[dict | None, str]:
     builds with shell tabs in that case.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    print(f"[insights] API key present: {bool(api_key)}", flush=True)
     if not api_key:
         return None, "No Claude insights (ANTHROPIC_API_KEY not set)."
 
     try:
         import anthropic
-        print(f"[insights] anthropic SDK version: {anthropic.__version__}", flush=True)
-    except ImportError as e:
-        print(f"[insights] ImportError: {e}", flush=True)
+    except ImportError:
         return None, "No Claude insights (anthropic SDK not installed)."
 
     prompt = _build_prompt(cfg, tables, month)
-    print(f"[insights] Prompt length: {len(prompt)} chars. Calling claude-opus-4-8...", flush=True)
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
@@ -171,16 +167,12 @@ def generate_insights(cfg, tables: dict, month: str) -> tuple[dict | None, str]:
         ) as stream:
             msg = stream.get_final_message()
 
-        print(f"[insights] Response received. Stop reason: {msg.stop_reason}. Blocks: {[getattr(b,'type','?') for b in msg.content]}", flush=True)
-
         # With adaptive thinking the response has thinking blocks followed by a text block.
         # Collect the last text block (the one that contains the JSON).
         raw_text = ""
         for block in msg.content:
             if getattr(block, "type", None) == "text" and hasattr(block, "text"):
                 raw_text = block.text
-
-        print(f"[insights] raw_text length: {len(raw_text)}. First 200 chars: {raw_text[:200]!r}", flush=True)
 
         # Strip markdown fences if Claude added them despite instructions
         stripped = raw_text.strip()
@@ -189,13 +181,9 @@ def generate_insights(cfg, tables: dict, month: str) -> tuple[dict | None, str]:
             stripped = stripped.rsplit("```", 1)[0].strip()
 
         data = json.loads(stripped)
-        print(f"[insights] JSON parsed OK. Keys: {list(data.keys())}", flush=True)
         return _normalise(data), "Claude insights generated."
 
     except Exception as exc:
-        import traceback
-        print(f"[insights] Exception: {type(exc).__name__}: {exc}", flush=True)
-        traceback.print_exc()
         return None, f"Claude insights failed: {type(exc).__name__}: {exc}"
 
 
