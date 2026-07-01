@@ -30,12 +30,15 @@
   .breadcrumb { margin-left: 8px; font-size: 12px; color: #5b6573; }
   .body-pad { padding: 30px; }
 
-  .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+  .logo-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+  .logo-row-left { display: flex; align-items: center; gap: 10px; }
   .logo-glyph {
     width: 26px; height: 26px; border-radius: 7px; background: #B8F24A; color: #0E1218;
     display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
   }
   .wordmark { font-weight: 600; font-size: 12px; letter-spacing: .24em; color: #aab3c0; }
+  .hop-link { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #697483; text-decoration: none; }
+  .hop-link:hover { color: #B8F24A; }
 
   h1 { margin: 0 0 10px; font-weight: 600; font-size: 30px; line-height: 1.05; letter-spacing: -0.02em; }
   .sub { margin: 0 0 26px; font-size: 13px; color: #7b8698; line-height: 1.5; }
@@ -182,8 +185,13 @@
     <div class="body-pad">
 
       <div class="logo-row">
-        <span class="logo-glyph" id="logoGlyph">▤</span>
-        <span class="wordmark">ANALYTICS ENGINE</span>
+        <div class="logo-row-left">
+          <span class="logo-glyph" id="logoGlyph">▤</span>
+          <span class="wordmark">ANALYTICS ENGINE</span>
+        </div>
+        {% if scraper_url %}
+        <a href="{{ scraper_url }}/" target="_blank" rel="noreferrer" class="hop-link">Scraper ↗</a>
+        {% endif %}
       </div>
 
       <!-- ============ IDLE / FORM ============ -->

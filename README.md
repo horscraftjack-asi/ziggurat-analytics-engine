@@ -62,13 +62,16 @@ This app and `ziggurat-comment-scraper` are **separate repos, separate Railway d
 URLs** — deliberately not merged. They're tied together at the UI layer with plain links carrying
 context via query params, not a shared frontend:
 
-- **Analytics → scraper:** set `SCRAPER_URL` to the scraper frontend's URL. The Result screen's
-  "Scrape top video" link opens `<scraper-url>/?url=<video-url>` for the top YouTube post, in a new
-  tab, prefilling the scraper's form.
-- **Scraper → Analytics:** already built on the scraper side (`VITE_ANALYTICS_URL`) — it opens
-  `<this-app-url>/?client=<slug>`. This page reads `?client=` on load and preselects that client's
-  dropdown if the slug is recognised; unrecognised or missing slug just falls back to the default,
-  never errors.
+- **Permanent nav:** a "Scraper ↗" link sits in the header at all times (once `SCRAPER_URL` is
+  set) — not tied to any run, just a plain jump to `<scraper-url>/`.
+- **Contextual hop, Analytics → scraper:** the Result screen's "Scrape top video →" button opens
+  `<scraper-url>/?url=<video-url>` for the top-ranked post, in a new tab, prefilling the scraper's
+  form — but only when that top post is specifically a YouTube post with a link. Most bundled
+  clients only have Instagram/Facebook/Stories active, so this won't show for them.
+- **Contextual hop, scraper → Analytics:** built on the scraper side (`VITE_ANALYTICS_URL`) — it
+  opens `<this-app-url>/?client=<slug>`. This page reads `?client=` on load and preselects that
+  client's dropdown if the slug is recognised; unrecognised or missing slug just falls back to the
+  default, never errors.
 
 Neither hop is required — unset either env var and that link/behaviour simply doesn't appear.
 
