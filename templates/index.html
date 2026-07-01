@@ -173,13 +173,15 @@
         msg.className = "msg err";
         msg.textContent = e.error + (e.detail ? " " + JSON.stringify(e.detail) : "");
       } else {
+        const insightNote = r.headers.get("X-Insight-Note") || "";
         const blob = await r.blob();
         const name = (r.headers.get("Content-Disposition") || "").match(/filename="?([^"]+)"?/);
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = name ? name[1] : "performance.xlsx";
         a.click();
-        msg.className = "msg ok"; msg.textContent = "Workbook ready — check your downloads.";
+        msg.className = "msg ok";
+        msg.textContent = "Workbook ready — check your downloads." + (insightNote ? " " + insightNote : "");
       }
     } catch (err) {
       msg.className = "msg err"; msg.textContent = "Network error: " + err.message;

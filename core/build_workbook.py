@@ -510,10 +510,13 @@ def run_build(config_path: str, csv_paths: dict, month: str | None = None,
     breakdown_frames = {"instagram": tables.get("instagram"), "facebook": tables.get("facebook")}
 
     try:
-        from .insights import generate_insights
-    except ImportError:
-        from insights import generate_insights
-    insights, insight_note = generate_insights(cfg, tables, month)
+        try:
+            from .insights import generate_insights
+        except ImportError:
+            from insights import generate_insights
+        insights, insight_note = generate_insights(cfg, tables, month)
+    except Exception as exc:
+        insights, insight_note = None, f"Claude insights failed at import: {type(exc).__name__}: {exc}"
     report["notes"].append(insight_note)
 
     out_path = build_workbook(tables, cfg, month, out_dir, report["notes"],

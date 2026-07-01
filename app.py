@@ -82,8 +82,14 @@ def run():
     except Exception as e:
         return jsonify({"error": f"Build failed: {e}"}), 500
 
-    return send_file(result["output"], as_attachment=True,
+    resp = send_file(result["output"], as_attachment=True,
                      download_name=os.path.basename(result["output"]))
+    # Expose build notes (including Claude insight status) to the frontend.
+    insight_note = next((n for n in result.get("notes", [])
+                         if "insight" in n.lower() or "claude" in n.lower()), "")
+    resp.headers["X-Insight-Note"] = insight_note
+    resp.headers["Access-Control-Expose-Headers"] = "X-Insight-Note"
+    return resp
 
 
 # ---- Phase 2 stub: Claude-powered insight tabs -------------------------------------------------
