@@ -38,14 +38,14 @@
   .msg.ok { background: #eaf6ec; color: #1b5e2a; display: block; }
   details { margin-top: 1.25rem; font-size: .85rem; color: var(--muted); }
   summary { cursor: pointer; }
-  .platform-badges { display: flex; gap: .4rem; margin: .5rem 0 0; flex-wrap: wrap; min-height: 1.6rem; }
-  .badge { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .6rem;
-           border-radius: 20px; font-size: .75rem; font-weight: 700; letter-spacing: .04em;
-           text-transform: uppercase; border: 1.5px solid; transition: opacity .15s; }
-  .badge.meta-on  { background: #e8f2ef; color: var(--meta); border-color: var(--meta); }
-  .badge.meta-off { background: #f4f4f2; color: var(--muted); border-color: var(--line); opacity: .5; }
-  .badge.yt-on    { background: #fdeaea; color: var(--yt);   border-color: #f5a0a0; }
-  .badge.yt-off   { background: #f4f4f2; color: var(--muted); border-color: var(--line); opacity: .5; }
+  .platform-badges { display: flex; gap: .7rem; margin: .45rem 0 0; flex-wrap: wrap; min-height: 1.4rem; }
+  .badge { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem;
+           font-weight: 600; pointer-events: none; user-select: none; }
+  .badge::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+  .badge.meta-on  { color: var(--meta); } .badge.meta-on::before  { background: var(--meta); }
+  .badge.meta-off { color: var(--muted); opacity: .45; } .badge.meta-off::before { background: var(--muted); }
+  .badge.yt-on    { color: var(--yt); }   .badge.yt-on::before    { background: var(--yt); }
+  .badge.yt-off   { color: var(--muted); opacity: .45; } .badge.yt-off::before  { background: var(--muted); }
 </style>
 </head>
 <body>
@@ -76,11 +76,12 @@
   <p class="platform-label yt">YouTube Studio exports</p>
   <p style="font-size:.82rem;color:var(--muted);margin:.2rem 0 .6rem">
     Export from: YouTube Studio → Content → Analytics → Advanced mode → Export.<br>
-    Upload the <strong>Table data.csv</strong>. Shorts and Long-form are split automatically by duration.
+    YouTube Studio exports three files — only upload <strong>Table data.csv</strong>. Ignore Chart data and Table data (totals).<br>
+    Shorts and Long-form are split automatically by duration.
   </p>
   <div class="row2">
     <label class="drop yt-drop" id="dropYt">
-      Table data.csv (all content)
+      Table data.csv
       <input type="file" id="yt" accept=".csv">
     </label>
     <div style="display:flex;flex-direction:column;gap:.6rem">
