@@ -22,7 +22,7 @@ app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB upload cap
 # Lock CORS to the frontend's origin in production. Set FRONTEND_ORIGIN to the
 # unified frontend's URL (comma-separated for multiple). Unset -> "*", so this
 # app's own Jinja page (same-origin, unaffected by CORS either way) and local
-# dev keep working. Mirrors the pattern in ziggurat-comment-scraper/app.py so
+# dev keep working. Mirrors the pattern in eccolo-ai-scraper-sentiment/app.py so
 # both backends configure the same way.
 _origins_env = os.environ.get("FRONTEND_ORIGIN", "").strip()
 _origins = [o.strip() for o in _origins_env.split(",") if o.strip()] or "*"

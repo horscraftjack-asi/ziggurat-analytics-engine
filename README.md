@@ -11,7 +11,7 @@ download the scored performance workbook. No Claude account needed.
 ## Deploy (Railway, via GitHub)
 Same flow as the YouTube scraper — a second Railway service pointed at a new repo.
 
-1. **Create a new GitHub repo** (e.g. `ziggurat-analytics-engine`) and add these files, keeping
+1. **Create a new GitHub repo** (e.g. `eccolo-ai-data-engine`) and add these files, keeping
    the folder structure exactly: `app.py` at the root, with `templates/`, `core/`, and `configs/`
    beside it. The structure matters — Flask looks for `templates/` relative to `app.py`, and the
    app imports the engine from `core/`.
@@ -58,7 +58,7 @@ way.
 
 ## The flywheel cross-link to the Comment Scraper
 
-This app and `ziggurat-comment-scraper` are **separate repos, separate Railway deploys, separate
+This app and `eccolo-ai-scraper-sentiment` are **separate repos, separate Railway deploys, separate
 URLs** — deliberately not merged. They're tied together at the UI layer with plain links carrying
 context via query params, not a shared frontend:
 
