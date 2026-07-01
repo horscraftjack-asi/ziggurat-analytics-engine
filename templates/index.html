@@ -3,157 +3,367 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Ziggurat Analytics Engine</title>
 <style>
-  :root { --accent: #2A4A44; --bg: #faf9f7; --line: #e3e0db; --ink: #1d1d1b; --muted: #6b6b66; --yt: #CC0000; --meta: #2A4A44; }
+  @keyframes tl-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  @keyframes tl-loadbar { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+  @keyframes tl-soft { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  @keyframes tl-spin { to { transform: rotate(360deg); } }
+
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, Arial, sans-serif; background: var(--bg); color: var(--ink);
-         margin: 0; padding: 2.5rem 1rem; line-height: 1.5; }
-  .card { max-width: 560px; margin: 0 auto; background: #fff; border: 1px solid var(--line);
-          border-radius: 14px; padding: 2rem 2rem 2.25rem; }
-  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-  .sub { color: var(--muted); margin: 0 0 1.75rem; font-size: .92rem; }
-  label { display: block; font-weight: 600; font-size: .9rem; margin: 1.1rem 0 .35rem; }
-  .hint { font-weight: 400; color: var(--muted); font-size: .82rem; }
-  select, input[type=text] { width: 100%; padding: .6rem .7rem; border: 1px solid var(--line);
-          border-radius: 8px; font-size: .95rem; background: #fff; }
-  .drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: .9rem; font-size: .88rem;
-          color: var(--muted); cursor: pointer; transition: border-color .15s; }
-  .drop:hover { border-color: var(--accent); }
+  body {
+    margin: 0; padding: 2.5rem 1rem; min-height: 100vh; background: #05070a;
+    display: flex; justify-content: center;
+    font-family: 'Space Grotesk', sans-serif; color: #E7EBF1;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .wrap { width: 100%; max-width: 600px; }
+  .card {
+    background: #0E1218; border: 1px solid #232b36; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 34px 70px -28px rgba(0,0,0,.7);
+  }
+  .titlebar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #0A0D12; border-bottom: 1px solid #1a212b; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #2a323d; }
+  .breadcrumb { margin-left: 8px; font-size: 12px; color: #5b6573; }
+  .body-pad { padding: 30px; }
+
+  .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+  .logo-glyph {
+    width: 26px; height: 26px; border-radius: 7px; background: #B8F24A; color: #0E1218;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
+  }
+  .wordmark { font-weight: 600; font-size: 12px; letter-spacing: .24em; color: #aab3c0; }
+
+  h1 { margin: 0 0 10px; font-weight: 600; font-size: 30px; line-height: 1.05; letter-spacing: -0.02em; }
+  .sub { margin: 0 0 26px; font-size: 13px; color: #7b8698; line-height: 1.5; }
+
+  .label { font-weight: 600; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: #5b6573; margin-bottom: 10px; }
+  .label.accent { color: #B8F24A; }
+  .label .faint { color: #3f4854; text-transform: none; letter-spacing: normal; }
+
+  .field {
+    background: #0A0D12; border: 1px solid #2c3540; border-radius: 10px; color: #E7EBF1;
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+  }
+  .select-wrap { position: relative; margin-bottom: 20px; }
+  select.field {
+    width: 100%; height: 48px; padding: 0 40px 0 14px; appearance: none; -webkit-appearance: none;
+    font-family: 'Space Grotesk', sans-serif; font-size: 14px; cursor: pointer;
+  }
+  .select-arrow { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #5b6573; pointer-events: none; font-size: 12px; }
+
+  input[type=text].field { width: 100%; height: 48px; padding: 0 14px; outline: none; }
+  input[type=text].field::placeholder { color: #4f5a6a; }
+  input[type=text].field:focus { border-color: #B8F24A; caret-color: #B8F24A; }
+
+  .source-toggle { display: flex; gap: 20px; margin-bottom: 24px; }
+  .source-pill { display: flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 12px; color: #5b6573; cursor: pointer; background: none; border: none; padding: 0; }
+  .source-pill .pdot { width: 7px; height: 7px; border-radius: 50%; background: #2a323d; }
+  .source-pill.active { color: #B8F24A; }
+  .source-pill.active .pdot { background: #B8F24A; }
+
+  .drop {
+    border: 1px dashed #2c3540; border-radius: 10px; background: #0A0D12;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    cursor: pointer; text-align: center; transition: border-color .15s;
+  }
+  .drop:hover { border-color: #3f4854; }
+  .drop.filled { border-style: solid; border-color: #B8F24A; }
   .drop input { display: none; }
-  .drop.filled { border-style: solid; border-color: var(--accent); color: var(--ink); }
-  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .6rem; }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
-  .section-divider { border: 0; border-top: 1px solid var(--line); margin: 1.4rem 0 .2rem; }
-  .platform-label { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-                    color: var(--muted); margin: 1.1rem 0 .35rem; }
-  .platform-label.yt { color: var(--yt); }
-  .drop.yt-drop { border-color: #f5c6c6; }
-  .drop.yt-drop:hover { border-color: var(--yt); }
-  button { margin-top: 1.75rem; width: 100%; padding: .8rem; background: var(--accent); color: #fff;
-           border: 0; border-radius: 9px; font-size: 1rem; font-weight: 600; cursor: pointer; }
-  button:disabled { opacity: .5; cursor: default; }
-  .msg { margin-top: 1rem; padding: .7rem .8rem; border-radius: 8px; font-size: .88rem; display: none; }
-  .msg.err { background: #fdeaea; color: #8b2020; display: block; }
-  .msg.ok { background: #eaf6ec; color: #1b5e2a; display: block; }
-  details { margin-top: 1.25rem; font-size: .85rem; color: var(--muted); }
-  summary { cursor: pointer; }
-  .platform-badges { display: flex; gap: .7rem; margin: .45rem 0 0; flex-wrap: wrap; min-height: 1.4rem; }
-  .badge { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem;
-           font-weight: 600; pointer-events: none; user-select: none; }
-  .badge::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
-  .badge.meta-on  { color: var(--meta); } .badge.meta-on::before  { background: var(--meta); }
-  .badge.meta-off { color: var(--muted); opacity: .45; } .badge.meta-off::before { background: var(--muted); }
-  .badge.yt-on    { color: var(--yt); }   .badge.yt-on::before    { background: var(--yt); }
-  .badge.yt-off   { color: var(--muted); opacity: .45; } .badge.yt-off::before  { background: var(--muted); }
+  .drop-title { font-size: 13px; color: #c3cad4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90%; }
+  .drop-hint { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5b6573; }
+
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 24px; }
+  .row3 .drop { height: 74px; }
+
+  .section-divider { border: 0; border-top: 1px solid #1a212b; padding-top: 20px; margin-bottom: 20px; }
+  .yt-copy { margin: 0 0 16px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6; color: #697483; }
+  .yt-copy strong { color: #9aa4b3; font-weight: 500; }
+  .yt-row { display: flex; gap: 10px; }
+  .yt-row .drop-main { flex: 1.3; padding: 22px 0; }
+  .yt-row .drop-stack { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .yt-row .drop-stack .drop { flex: 1; font-size: 12px; color: #8a94a4; }
+
+  .config-drop { height: 56px; margin-bottom: 20px; }
+
+  .btn-primary {
+    width: 100%; height: 52px; border: none; border-radius: 11px; background: #B8F24A; color: #0E1218;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; cursor: pointer;
+    margin-top: 4px;
+  }
+  .btn-primary:disabled { background: #141b23; color: #4f5a6a; cursor: not-allowed; }
+
+  details.howto { margin-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #697483; }
+  details.howto summary { cursor: pointer; list-style: none; }
+  details.howto summary::-webkit-details-marker { display: none; }
+  details.howto summary::before { content: '▸'; color: #B8F24A; margin-right: 8px; }
+  details.howto[open] summary::before { content: '▾'; }
+  details.howto p { margin: 10px 0 0; line-height: 1.6; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* building */
+  .elapsed-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 24px; }
+  .elapsed-num { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 52px; line-height: .9; letter-spacing: -0.02em; color: #fff; }
+  .elapsed-label { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #8a94a4; padding-bottom: 8px; }
+  .caret-bar { width: 3px; height: 34px; background: #B8F24A; margin: 0 0 10px 2px; animation: tl-blink 1s step-end infinite; }
+  .progress-track { position: relative; height: 8px; border-radius: 999px; background: #1a212b; overflow: hidden; margin-bottom: 10px; }
+  .progress-fill { position: absolute; inset: 0 auto 0 0; width: 25%; background: #B8F24A; border-radius: 999px; animation: tl-loadbar 1.6s linear infinite; }
+  .progress-meta { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #697483; margin-bottom: 28px; }
+  .steps { display: flex; flex-direction: column; gap: 14px; margin-bottom: 28px; }
+  .step { display: flex; align-items: center; gap: 12px; }
+  .step-icon { width: 18px; height: 18px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 11px; }
+  .step-icon.pending { border: 1.5px solid #283039; }
+  .step-icon.active { border: 2px solid #283039; border-top-color: #B8F24A; animation: tl-spin .8s linear infinite; }
+  .step-icon.done { background: rgba(184,242,74,.16); color: #B8F24A; }
+  .step-label { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #5b6573; }
+  .step-label.active { color: #E7EBF1; }
+  .step-label.done { color: #9aa4b3; }
+  .log-box { background: #080b0f; border: 1px solid #151b23; border-radius: 10px; padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; }
+  .log-line { color: #697483; }
+  .log-line.last { color: #B8F24A; }
+
+  /* result / error */
+  .status-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: rgba(184,242,74,.12); color: #B8F24A; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: .1em; }
+  .pill .pdot { width: 6px; height: 6px; border-radius: 50%; background: #B8F24A; }
+  .finished-at { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #697483; }
+  .meta-line { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #7b8698; margin-bottom: 24px; }
+  .stat-cards { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 26px; }
+  .stat-card { flex: 1; min-width: 90px; background: #0A0D12; border: 1px solid #1c232d; border-radius: 10px; padding: 14px; }
+  .stat-num { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 26px; color: #fff; }
+  .stat-num.accent { color: #B8F24A; }
+  .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .12em; color: #697483; margin-top: 6px; }
+  .notes-box { margin-bottom: 26px; }
+  .notes-list { background: #080b0f; border: 1px solid #151b23; border-radius: 10px; padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.7; color: #9aa4b3; }
+  .notes-list div { padding: 2px 0; }
+  .insight-note { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #B8F24A; margin-bottom: 26px; }
+  .btn-secondary { flex: 1; height: 44px; border: 1px solid #2c3540; border-radius: 10px; background: transparent; color: #aab3c0; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+  .err-box { background: #150a0b; border: 1px solid #3a1f22; border-radius: 10px; padding: 16px; margin-bottom: 24px; }
+  .err-box p { margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #ff9d92; }
 </style>
 </head>
 <body>
-<div class="card">
-  <h1>Analytics Engine</h1>
-  <p class="sub">Upload a month of exports (Meta and/or YouTube), pick the client, download the scored workbook.</p>
+<div class="wrap">
+  <div class="card">
+    <div class="titlebar">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="breadcrumb mono" id="breadcrumb">threadline — ~/analytics</span>
+    </div>
+    <div class="body-pad">
 
-  <label>Client</label>
-  <select id="client">
-    {% for c in clients %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
-    <option value="__upload__">— Upload a config instead —</option>
-  </select>
-  <div class="platform-badges" id="platformBadges"></div>
+      <div class="logo-row">
+        <span class="logo-glyph" id="logoGlyph">▤</span>
+        <span class="wordmark">ANALYTICS ENGINE</span>
+      </div>
 
-  <div id="configRow" style="display:none">
-    <label>Config file <span class="hint">(a *-analytics-config.md)</span></label>
-    <label class="drop" id="dropConfig">Choose config…<input type="file" id="config" accept=".md"></label>
-  </div>
+      <!-- ============ IDLE / FORM ============ -->
+      <div class="view active" id="view-idle">
+        <h1>Score a month of exports</h1>
+        <p class="sub">Upload Meta and/or YouTube exports, pick the client → download the scored workbook.</p>
 
-  <p class="platform-label">Meta exports</p>
-  <div class="row3">
-    <label class="drop" id="dropFb">Facebook<input type="file" id="fb" accept=".csv"></label>
-    <label class="drop" id="dropIg">Instagram<input type="file" id="ig" accept=".csv"></label>
-    <label class="drop" id="dropStories">Stories<input type="file" id="stories" accept=".csv"></label>
-  </div>
+        <div class="label">Client</div>
+        <div class="select-wrap">
+          <select id="client" class="field">
+            {% for c in clients %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
+            <option value="__upload__">— Upload a config instead —</option>
+          </select>
+          <span class="select-arrow">▾</span>
+        </div>
 
-  <hr class="section-divider">
-  <p class="platform-label yt">YouTube Studio exports</p>
-  <p style="font-size:.82rem;color:var(--muted);margin:.2rem 0 .6rem">
-    Export from: YouTube Studio → Content → Analytics → Advanced mode → Export.<br>
-    YouTube Studio exports three files — only upload <strong>Table data.csv</strong>. Ignore Chart data and Table data (totals).<br>
-    Shorts and Long-form are split automatically by duration.
-  </p>
-  <div class="row2">
-    <label class="drop yt-drop" id="dropYt">
-      Table data.csv
-      <input type="file" id="yt" accept=".csv">
-    </label>
-    <div style="display:flex;flex-direction:column;gap:.6rem">
-      <label class="drop yt-drop" id="dropYtShorts" style="flex:1">
-        Shorts only
-        <input type="file" id="yt_shorts" accept=".csv">
-      </label>
-      <label class="drop yt-drop" id="dropYtLongform" style="flex:1">
-        Long-form only
-        <input type="file" id="yt_longform" accept=".csv">
-      </label>
+        <div id="configRow" style="display:none">
+          <div class="label">Config file <span class="faint">· a *-analytics-config.md</span></div>
+          <label class="drop config-drop" id="dropConfig">
+            <span class="drop-title">Choose config…</span>
+            <input type="file" id="config" accept=".md">
+          </label>
+        </div>
+
+        <div class="source-toggle">
+          <button type="button" class="source-pill active" id="pillMeta"><span class="pdot"></span>META</button>
+          <button type="button" class="source-pill" id="pillYt"><span class="pdot"></span>YOUTUBE</button>
+        </div>
+
+        <div id="metaSection">
+          <div class="label">Meta exports</div>
+          <div class="row3">
+            <label class="drop" id="dropFb"><span class="drop-title">Facebook</span><span class="drop-hint">drop .csv</span><input type="file" id="fb" accept=".csv"></label>
+            <label class="drop" id="dropIg"><span class="drop-title">Instagram</span><span class="drop-hint">drop .csv</span><input type="file" id="ig" accept=".csv"></label>
+            <label class="drop" id="dropStories"><span class="drop-title">Stories</span><span class="drop-hint">drop .csv</span><input type="file" id="stories" accept=".csv"></label>
+          </div>
+        </div>
+
+        <div id="ytSection" style="display:none">
+          <div class="label accent">YouTube Studio exports</div>
+          <p class="yt-copy">
+            Studio → Content → Analytics → Advanced → Export. Upload only <strong>Table data.csv</strong>.
+            Shorts &amp; long-form split automatically by duration.
+          </p>
+          <div class="yt-row">
+            <label class="drop drop-main" id="dropYt"><span class="drop-title">Table data.csv</span><span class="drop-hint">drop file</span><input type="file" id="yt" accept=".csv"></label>
+            <div class="drop-stack">
+              <label class="drop" id="dropYtShorts"><span class="drop-title">Shorts only</span><input type="file" id="yt_shorts" accept=".csv"></label>
+              <label class="drop" id="dropYtLongform"><span class="drop-title">Long-form only</span><input type="file" id="yt_longform" accept=".csv"></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-divider">
+          <div class="label">Month <span class="faint">· auto-detected if blank</span></div>
+          <input type="text" id="month" class="field" placeholder="e.g. May 2026">
+        </div>
+
+        <button class="btn-primary" id="go">Build workbook →</button>
+
+        <details class="howto">
+          <summary>How does this work?</summary>
+          <p>The engine scores every post by rank-order within its platform, splits out special content
+          (e.g. Trial Reels), flags CTAs, and builds the standard tabs. It produces the data tabs fully;
+          the written insight tabs are added afterward. No data leaves Ziggurat's app.</p>
+        </details>
+      </div>
+
+      <!-- ============ BUILDING ============ -->
+      <div class="view" id="view-building">
+        <div class="mono" style="font-size:13px;color:#7b8698;margin-bottom:6px">building workbook…</div>
+        <div class="elapsed-row">
+          <span class="elapsed-num" id="elapsedNum">0</span>
+          <span class="elapsed-label">sec elapsed</span>
+          <span class="caret-bar"></span>
+        </div>
+        <div class="progress-track"><div class="progress-fill"></div></div>
+        <div class="progress-meta"><span>working…</span><span>large exports take a little longer</span></div>
+        <div class="steps" id="stepsList"></div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+
+      <!-- ============ RESULT ============ -->
+      <div class="view" id="view-result">
+        <div class="status-row">
+          <span class="pill"><span class="pdot"></span>COMPLETE</span>
+          <span class="finished-at" id="finishedAt"></span>
+        </div>
+        <div class="meta-line" id="resultMeta"></div>
+        <div class="stat-cards" id="statCards"></div>
+        <div class="notes-box" id="notesBox" style="display:none">
+          <div class="label">Build notes</div>
+          <div class="notes-list" id="notesList"></div>
+        </div>
+        <div class="insight-note" id="insightNote" style="display:none"></div>
+        <button class="btn-primary" id="downloadAgain">↓ Download workbook</button>
+        <div class="btn-row">
+          <button class="btn-secondary" id="buildAnother">Build another</button>
+        </div>
+      </div>
+
+      <!-- ============ ERROR ============ -->
+      <div class="view" id="view-error">
+        <h1 style="font-size:28px">Couldn't build that</h1>
+        <div class="err-box"><p id="errMsg"></p></div>
+        <button class="btn-primary" id="tryAgain">Try again</button>
+      </div>
+
     </div>
   </div>
-
-  <label>Month <span class="hint">(optional — auto-detected if blank)</span></label>
-  <input type="text" id="month" placeholder="e.g. May 2026">
-
-  <button id="go">Build workbook</button>
-  <div class="msg" id="msg"></div>
-
-  <details>
-    <summary>How does this work?</summary>
-    <p>The engine scores every post by rank-order within its platform, splits out special content
-    (e.g. Trial Reels), flags CTAs, and builds the standard tabs. It produces the data tabs fully;
-    the written insight tabs are added afterward. No data leaves Ziggurat's app.</p>
-  </details>
 </div>
 
 <script>
   const $ = id => document.getElementById(id);
-  const client = $("client"), configRow = $("configRow"), msg = $("msg"), go = $("go");
+  const client = $("client"), configRow = $("configRow"), go = $("go");
+  const metaSection = $("metaSection"), ytSection = $("ytSection");
+  const pillMeta = $("pillMeta"), pillYt = $("pillYt");
+  const breadcrumb = $("breadcrumb");
 
-  // Per-client platform map injected from Flask — used to show upload guidance badges.
+  // Per-client platform map injected from Flask.
   const clientPlatforms = {{ client_platforms | tojson }};
   const META_PLATS = new Set(["instagram", "facebook", "stories"]);
   const YT_PLATS   = new Set(["youtube", "youtube_shorts", "youtube_longform"]);
 
-  function updateBadges() {
-    const badges = $("platformBadges");
-    badges.innerHTML = "";
-    if (client.value === "__upload__") return;
+  const PLATFORM_LABELS = {
+    facebook: "FACEBOOK", instagram: "INSTAGRAM", stories: "STORIES",
+    youtube_shorts: "SHORTS", youtube_longform: "LONG-FORM",
+  };
+
+  function setSource(source) {
+    const isYt = source === "youtube";
+    pillMeta.classList.toggle("active", !isYt);
+    pillYt.classList.toggle("active", isYt);
+    metaSection.style.display = isYt ? "none" : "block";
+    ytSection.style.display = isYt ? "block" : "none";
+  }
+  pillMeta.onclick = () => setSource("meta");
+  pillYt.onclick = () => setSource("youtube");
+
+  function defaultSourceForClient() {
+    if (client.value === "__upload__") return "meta";
     const plats = clientPlatforms[client.value] || [];
     const hasMeta = plats.some(p => META_PLATS.has(p));
     const hasYT   = plats.some(p => YT_PLATS.has(p));
-    badges.innerHTML = `
-      <span class="badge ${hasMeta ? 'meta-on' : 'meta-off'}" title="${hasMeta ? 'Meta exports active for this client' : 'Meta not configured for this client'}">
-        Meta
-      </span>
-      <span class="badge ${hasYT ? 'yt-on' : 'yt-off'}" title="${hasYT ? 'YouTube exports active for this client' : 'YouTube not configured for this client'}">
-        YouTube
-      </span>
-    `;
+    return (hasYT && !hasMeta) ? "youtube" : "meta";
   }
 
   client.onchange = () => {
     configRow.style.display = client.value === "__upload__" ? "block" : "none";
-    updateBadges();
+    setSource(defaultSourceForClient());
   };
-  updateBadges(); // populate on page load
+  setSource(defaultSourceForClient()); // populate on page load
 
-  // reflect chosen filenames on the drop labels
+  // reflect chosen filenames on the drop labels (and remember the original label so
+  // resetForm() can restore it once a file has replaced it)
   ["fb","ig","stories","yt","yt_shorts","yt_longform","config"].forEach(id => {
     const input = $(id); if (!input) return;
+    const label = input.closest(".drop");
+    const title = label.querySelector(".drop-title");
+    if (title) title.dataset.orig = title.textContent;
     input.onchange = () => {
-      const label = input.closest(".drop");
-      if (input.files.length) { label.classList.add("filled");
-        label.childNodes[0].nodeValue = input.files[0].name; }
+      if (input.files.length) {
+        label.classList.add("filled");
+        if (title) title.textContent = input.files[0].name;
+      }
     };
   });
 
+  function setView(name) {
+    ["idle","building","result","error"].forEach(v => $("view-"+v).classList.toggle("active", v === name));
+    breadcrumb.textContent = { idle: "threadline — ~/analytics", building: "threadline — building…",
+                                result: "threadline — done", error: "threadline — ~/analytics" }[name];
+    $("logoGlyph").style.animation = name === "building" ? "tl-soft 1.3s ease-in-out infinite" : "";
+  }
+
+  const STEP_LABELS = ["Parse CSVs", "Score posts", "Build tabs", "Write workbook"];
+  const LOG_ROTATION = [
+    "> reading uploaded exports…",
+    "> scoring posts by platform…",
+    "> still working — big exports take a little longer…",
+    "> almost there…",
+  ];
+
+  let timers = [];
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+  function renderSteps(activeIndex) {
+    $("stepsList").innerHTML = STEP_LABELS.map((label, i) => {
+      const state = i < activeIndex ? "done" : i === activeIndex ? "active" : "pending";
+      const icon = state === "done" ? "✓" : "";
+      return `<div class="step">
+        <span class="step-icon ${state}">${icon}</span>
+        <span class="step-label ${state === "pending" ? "" : state}">${label}</span>
+      </div>`;
+    }).join("");
+  }
+
+  function appendLog(lines) {
+    $("logBox").innerHTML = lines.map((line, i) =>
+      `<div class="log-line ${i === lines.length - 1 ? "last" : ""}">${line}${i === lines.length - 1 ? '<span style="animation:tl-blink 1s step-end infinite">▋</span>' : ""}</div>`
+    ).join("");
+  }
+
   go.onclick = async () => {
-    msg.className = "msg"; msg.textContent = "";
     const fd = new FormData();
     fd.append("client", client.value);
     fd.append("month", $("month").value);
@@ -163,31 +373,110 @@
     const hasAny = ["fb","ig","stories","yt","yt_shorts","yt_longform"]
                      .some(id => $(id) && $(id).files.length);
     if (!hasAny) {
-      msg.className = "msg err"; msg.textContent = "Add at least one CSV."; return;
+      $("errMsg").textContent = "Add at least one CSV.";
+      setView("error");
+      return;
     }
-    go.disabled = true; go.textContent = "Building…";
+
+    setView("building");
+    clearTimers();
+    renderSteps(0);
+    let logLines = [LOG_ROTATION[0]];
+    appendLog(logLines);
+    const startedAt = Date.now();
+
+    timers.push(setTimeout(() => renderSteps(1), 700));
+    timers.push(setInterval(() => {
+      $("elapsedNum").textContent = Math.floor((Date.now() - startedAt) / 1000);
+    }, 1000));
+    let logCount = 1;
+    timers.push(setInterval(() => {
+      logLines = [...logLines, LOG_ROTATION[logCount % LOG_ROTATION.length]].slice(-4);
+      appendLog(logLines);
+      logCount++;
+    }, 2200));
+
     try {
       const r = await fetch("/run", { method: "POST", body: fd });
       if (!r.ok) {
-        const e = await r.json().catch(() => ({error: "Build failed."}));
-        msg.className = "msg err";
-        msg.textContent = e.error + (e.detail ? " " + JSON.stringify(e.detail) : "");
-      } else {
-        const insightNote = r.headers.get("X-Insight-Note") || "";
-        const blob = await r.blob();
-        const name = (r.headers.get("Content-Disposition") || "").match(/filename="?([^"]+)"?/);
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = name ? name[1] : "performance.xlsx";
-        a.click();
-        msg.className = "msg ok";
-        msg.textContent = "Workbook ready — check your downloads." + (insightNote ? " " + insightNote : "");
+        const e = await r.json().catch(() => ({ error: "Build failed." }));
+        clearTimers();
+        $("errMsg").textContent = e.error + (e.detail ? " " + JSON.stringify(e.detail) : "");
+        setView("error");
+        return;
       }
+
+      const decode = (v) => { try { return decodeURIComponent(v || ""); } catch { return v || ""; } };
+      const insightNote = decode(r.headers.get("X-Insight-Note"));
+      const clientName = decode(r.headers.get("X-Client"));
+      const month = decode(r.headers.get("X-Month"));
+      const counts = JSON.parse(decode(r.headers.get("X-Counts")) || "{}");
+      const notes = JSON.parse(decode(r.headers.get("X-Notes")) || "[]");
+      const nameMatch = (r.headers.get("Content-Disposition") || "").match(/filename="?([^"]+)"?/);
+      const filename = nameMatch ? nameMatch[1] : "performance.xlsx";
+      const blob = await r.blob();
+
+      clearTimers();
+      renderSteps(2);
+      timers.push(setTimeout(() => {
+        renderSteps(3);
+        timers.push(setTimeout(() => {
+          const finishedMs = Date.now() - startedAt;
+          $("finishedAt").textContent = `finished in ${(finishedMs / 1000).toFixed(1)}s`;
+          $("resultMeta").textContent = [clientName, month].filter(Boolean).join(" · ");
+
+          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          const cards = Object.entries(counts).map(([plat, n]) =>
+            `<div class="stat-card"><div class="stat-num">${n.toLocaleString()}</div><div class="stat-label">${PLATFORM_LABELS[plat] || plat.toUpperCase()}</div></div>`
+          );
+          cards.push(`<div class="stat-card"><div class="stat-num accent">${total.toLocaleString()}</div><div class="stat-label">TOTAL POSTS</div></div>`);
+          $("statCards").innerHTML = cards.join("");
+
+          if (notes.length) {
+            $("notesBox").style.display = "block";
+            $("notesList").innerHTML = notes.map(n => `<div>&gt; ${n}</div>`).join("");
+          } else {
+            $("notesBox").style.display = "none";
+          }
+          if (insightNote) {
+            $("insightNote").style.display = "block";
+            $("insightNote").textContent = insightNote;
+          } else {
+            $("insightNote").style.display = "none";
+          }
+
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename; a.click();
+          $("downloadAgain").onclick = () => {
+            const a2 = document.createElement("a");
+            a2.href = url; a2.download = filename; a2.click();
+          };
+
+          setView("result");
+        }, 250));
+      }, 250));
     } catch (err) {
-      msg.className = "msg err"; msg.textContent = "Network error: " + err.message;
+      clearTimers();
+      $("errMsg").textContent = "Network error: " + err.message;
+      setView("error");
     }
-    go.disabled = false; go.textContent = "Build workbook";
   };
+
+  function resetForm() {
+    ["fb","ig","stories","yt","yt_shorts","yt_longform","config"].forEach(id => {
+      const input = $(id); if (!input) return;
+      input.value = "";
+      const label = input.closest(".drop");
+      label.classList.remove("filled");
+      const title = label.querySelector(".drop-title");
+      if (title) title.textContent = title.dataset.orig || title.textContent;
+    });
+    $("month").value = "";
+    setView("idle");
+  }
+  $("buildAnother").onclick = resetForm;
+  $("tryAgain").onclick = () => setView("idle");
 </script>
 </body>
 </html>

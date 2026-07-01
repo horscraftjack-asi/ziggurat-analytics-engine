@@ -8,7 +8,9 @@ The optional /insights step (Claude API) is stubbed at the bottom for phase 2.
 """
 import os
 import glob
+import json
 import tempfile
+from urllib.parse import quote
 from flask import Flask, request, render_template, send_file, jsonify
 
 from core import build_workbook as bw
@@ -84,11 +86,19 @@ def run():
 
     resp = send_file(result["output"], as_attachment=True,
                      download_name=os.path.basename(result["output"]))
-    # Expose build notes (including Claude insight status) to the frontend.
+    # Expose build notes + stats to the frontend's result screen. Header values must be
+    # Latin-1 safe, so anything that isn't plain ASCII (client names, notes) is URL-quoted.
     insight_note = next((n for n in result.get("notes", [])
                          if "insight" in n.lower() or "claude" in n.lower()), "")
-    resp.headers["X-Insight-Note"] = insight_note
-    resp.headers["Access-Control-Expose-Headers"] = "X-Insight-Note"
+    other_notes = [n for n in result.get("notes", []) if n != insight_note]
+    resp.headers["X-Insight-Note"] = quote(insight_note)
+    resp.headers["X-Client"] = quote(result.get("client") or "")
+    resp.headers["X-Month"] = quote(result.get("month") or "")
+    resp.headers["X-Counts"] = quote(json.dumps(result.get("counts") or {}))
+    resp.headers["X-Notes"] = quote(json.dumps(other_notes))
+    resp.headers["Access-Control-Expose-Headers"] = (
+        "X-Insight-Note, X-Client, X-Month, X-Counts, X-Notes"
+    )
     return resp
 
 
